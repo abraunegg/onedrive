@@ -1188,7 +1188,7 @@ In some cases, it may be desirable to 'download only' from Microsoft OneDrive. T
 ```text
 onedrive --sync --download-only
 ```
-This will download all the content from Microsoft OneDrive to your `~/OneDrive` location. Any files that are deleted online will remain locally and will not be removed.
+This downloads content from Microsoft OneDrive within the selected synchronisation scope to your configured `sync_dir` (by default, `~/OneDrive`). Files whose online counterparts are deleted remain locally and are not removed when `--cleanup-local-files` is not enabled.
 
 > [!IMPORTANT]
 > There is an application functionality change between v2.4.x and v.2.5x when using this option.
@@ -1202,6 +1202,9 @@ This will download all the content from Microsoft OneDrive to your `~/OneDrive` 
 > ```text
 > onedrive --sync --download-only --cleanup-local-files
 > ```
+
+> [!IMPORTANT]
+> When cleanup is enabled, local files and folders removed online, and local-only items without an online counterpart, can be removed **within the selected synchronisation scope**. `sync_list` and `--single-directory` restrict that scope; inclusion does not mean retention. Files outside the scope must not be removed by cleanup. This policy also applies when using `--monitor --download-only`, with the configured authoritative cleanup cadence.
 
 ### Performing a 'one-way' upload synchronisation with Microsoft OneDrive
 In certain scenarios, you might need to perform an 'upload only' operation to Microsoft OneDrive. This means that you'll be uploading data to OneDrive, but not synchronising any changes or additions made elsewhere. Use this command to initiate an upload-only synchronisation:
@@ -1233,10 +1236,13 @@ To enable selective synchronisation, create a file named `sync_list` in your app
 > Important points to understand before using 'sync_list'.
 > *    'sync_list' excludes _everything_ by default on OneDrive.
 > *    'sync_list' follows an _"exclude overrides include"_ rule, and requires **explicit inclusion**.
-> *    Order specific exclusions before inclusions, so that anything _specifically included_ is included.
+> *    **All exclusion rules must precede all inclusion rules.** An exclusion after an inclusion causes the client to reject the `sync_list` and exit before synchronisation.
 > *    How and where you place your `/` matters for excludes and includes in subdirectories.
 
-Each line of the 'sync_list' file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations. 
+Each line of the 'sync_list' file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during synchronisation operations.
+
+> [!NOTE]
+> `sync_list` defines the paths in scope; it is not a rule for retaining local content. With `--download-only --cleanup-local-files`, an in-scope local-only item is eligible for cleanup, whereas excluded paths are outside the cleanup scope.
 
 > [!CAUTION]
 > Rules without slashes (`Codes`, `Work`, `Backup`, `notes.txt`, etc.) are the most expensive form of `sync_list` rule as this instructs the client to scan every folder online & local to find a match. As a result, these types of rules can cause:
@@ -1279,6 +1285,15 @@ Each line of the 'sync_list' file represents a relative path from your `sync_dir
 
 # Exclude Secret_data ONLY in OneDrive root
 !/Secret_data/*
+
+# Exclude Android build directories located ANYWHERE inside ANY project
+!/Programming/Projects/Android/**/build/*
+
+# Exclude Android NDK /.cxx build trees ANYWHERE inside ANY project
+!/Programming/Projects/Android/**/.cxx/*
+
+# Exclude Web build output directories across ANY nested depth
+!/Programming/Projects/Web/**/build/*
 
 # ----------------------------------------------------------------------
 # Modern development / programming exclusions
@@ -1357,15 +1372,6 @@ Work/Project*
 # │   └── other_stuffs
 #
 /Parent/Blog/*
-
-# Include Android build directories located ANYWHERE inside ANY project
-!/Programming/Projects/Android/**/build/*
-
-# Include Android NDK /.cxx build trees ANYWHERE inside ANY project
-!/Programming/Projects/Android/**/.cxx/*
-
-# Include Web build output directories across ANY nested depth
-!/Programming/Projects/Web/**/build/*
 
 # Include the entire /Programming directory from OneDrive root
 /Programming

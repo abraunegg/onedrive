@@ -2200,6 +2200,21 @@ class ApplicationConfig {
 										logAndSetDifference(key ~ configOptionModifiedMessage, 7);
 									}
 								}
+								// Track both the presence and effective value of these options.
+								// Without these branches, any unrelated config edit causes a false --resync.
+								if (key == "check_nosync") {
+									check_nosync_present = true;
+									if (value != to!string(getValueBool("check_nosync"))) {
+										logAndSetDifference(key ~ configOptionModifiedMessage, 9);
+									}
+								}
+								if (key == "skip_size") {
+									skip_size_present = true;
+									if (value != to!string(getValueLong("skip_size"))) {
+										logAndSetDifference(key ~ configOptionModifiedMessage, 10);
+									}
+								}
+
 								if (key == "sync_business_shared_items") {
 									sync_business_shared_items_present = true;
 									if (value != to!string(getValueBool("sync_business_shared_items"))) {
@@ -2221,9 +2236,6 @@ class ApplicationConfig {
 				
 					// skip_file can be specified multiple times
 					if (skip_file_present && backupConfigFileSkipFile != configFileSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
-					
-					// skip_file can also be an empty string, thus when removed, as an empty string, we are going back to application defaults
-					if (skip_file_present && backupConfigFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
 					
 					// skip_dir can be specified multiple times
 					if (skip_dir_present && backupConfigFileSkipDir != configFileSkipDir) logAndSetDifference("skip_dir" ~ configOptionModifiedMessage, 5);
@@ -2727,6 +2739,24 @@ class ApplicationConfig {
 		// --force and --resync cannot be used together as --resync blows away the database, thus there is no way to calculate large local deletes
 		if ((getValueBool("force")) && (getValueBool("resync"))) {
 			addLogEntry("ERROR: --force and --resync cannot be used together as there is zero way to determine that a big delete has occurred");
+			operationalConflictDetected = true;
+		}
+		
+		// --mirror-local-state requires --local-first
+		if (getValueBool("mirror_local_state") && !getValueBool("local_first")) {
+			addLogEntry("ERROR: --mirror-local-state requires --local-first");
+			operationalConflictDetected = true;
+		}
+
+		// --mirror-local-state cannot be used with --upload-only
+		if (getValueBool("mirror_local_state") && getValueBool("upload_only")) {
+			addLogEntry("ERROR: --mirror-local-state cannot be used with --upload-only");
+			operationalConflictDetected = true;
+		}
+
+		// --mirror-local-state cannot be used with --download-only
+		if (getValueBool("mirror_local_state") && getValueBool("download_only")) {
+			addLogEntry("ERROR: --mirror-local-state cannot be used with --download-only");
 			operationalConflictDetected = true;
 		}
 				

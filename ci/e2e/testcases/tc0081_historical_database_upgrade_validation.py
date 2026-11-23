@@ -412,7 +412,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
         reset_directory(verify_root)
 
         command = [
-            binary,
+            binary, "--display-running-config",
             "--sync",
             "--download-only",
             "--verbose",
@@ -522,7 +522,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
         legacy_seed_stderr = case_log_dir / "db0001_legacy_seed_stderr.log"
         artifacts.extend([str(legacy_seed_stdout), str(legacy_seed_stderr)])
         legacy_seed_command = [
-            str(legacy_bin),
+            str(legacy_bin), "--display-running-config",
             "--sync",
             "--verbose",
             "--single-directory",
@@ -693,7 +693,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
         upgrade_stderr = case_log_dir / "db0002_current_upgrade_stderr.log"
         artifacts.extend([str(upgrade_stdout), str(upgrade_stderr)])
         current_sync_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--single-directory",
@@ -1063,7 +1063,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
         recovery_stderr = case_log_dir / "db0004_resync_recovery_stderr.log"
         artifacts.extend([str(recovery_stdout), str(recovery_stderr)])
         recovery_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--resync",

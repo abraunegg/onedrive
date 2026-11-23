@@ -115,9 +115,11 @@ The order becomes approximately:
 
 `--upload-only` performs the local database consistency pass and local filesystem scan but deliberately does not apply normal online-to-local reconciliation.
 
-`--download-only` applies online changes locally but suppresses the normal upload-side filesystem scan. The database consistency pass still has a role because it validates known local state and may correct metadata without treating the mode as a normal bidirectional upload cycle.
+`--download-only` applies online additions and updates locally but suppresses the normal upload-side filesystem scan. Without `--cleanup-local-files`, it preserves files and folders after their online counterparts have been deleted, and does not remove local-only content. This is the default local archive mode. The database consistency pass can still validate known local state and correct metadata, but must not turn online absence into local deletion in this mode.
 
-Other options can further modify reconciliation policy, but they do not collapse the distinction between online state, database state and live filesystem state.
+`--download-only --cleanup-local-files` explicitly enables deletion of in-scope local items removed online, and cleanup of in-scope local-only items that have no online counterpart. The deletion policy is the same under `--sync` and `--monitor`; in monitor mode, `monitor_authoritative_sync` determines *when* authoritative cleanup is performed, not *which* paths are eligible for deletion.
+
+These options do not collapse the distinction between online state, database state and live filesystem state. Client-side filtering and `--single-directory` constrain the scope of synchronisation, including cleanup.
 
 ## Local database recovery and resynchronisation
 
@@ -246,6 +248,8 @@ Examples include:
 
 Generated responses are deliberately more expensive than incremental `/delta`, but they let the same reconciliation engine operate against an explicitly bounded current-state view.
 
+The reconciliation source does not change the local-deletion policy. Neither a native `/delta` tombstone nor an item absent from a generated current-state response (including an out-of-sync database item) permits local deletion with `--download-only` alone. When `--cleanup-local-files` is enabled, local deletion is still restricted to the selected synchronisation scope.
+
 ### Online full-scan true-up versus local scans
 
 The following operations are different and should not all be described as a "full scan":
@@ -343,6 +347,8 @@ The main client-side filtering controls include:
 * `sync_list` - restrict synchronisation to explicitly included logical paths;
 * `sync_root_files` - allow logical-root files even when `sync_list` would otherwise exclude them; and
 * `skip_size` - exclude files at or above the configured size threshold.
+
+`sync_list` and `--single-directory` define synchronisation scope; they are not retention rules. When `--download-only --cleanup-local-files` is enabled, a local-only path included in the scope is eligible for cleanup, whereas excluded paths must remain untouched. Traversing a parent directory to reach included content does not bring its excluded siblings into scope.
 
 When an online item is explicitly included through `sync_list` but its local parent structure does not yet exist, the client can construct the required parent database and local directory structure so the included object can be materialised consistently.
 

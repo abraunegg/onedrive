@@ -44,7 +44,9 @@ class ClientSideFiltering {
 		
 		// Load the sync_list file if it exists
 		if (exists(appConfig.syncListFilePath)){
-			loadSyncList(appConfig.syncListFilePath);
+			if (!loadSyncList(appConfig.syncListFilePath)) {
+				return false;
+			}
 		}
 		
 		// Handle skip_dir configuration in config file
@@ -130,7 +132,7 @@ class ClientSideFiltering {
 	}
 
 	// Load sync_list file if it exists
-	void loadSyncList(string filepath) {
+	bool loadSyncList(string filepath) {
 		// open file as read only
 		auto file = File(filepath, "r");
 		auto range = file.byLine();
@@ -147,7 +149,10 @@ class ClientSideFiltering {
 			object.destroy(range);
 		}
 
+		bool inclusionSeen = false;
+		size_t lineNumber = 0;
 		foreach (line; range) {
+			lineNumber++;
 			auto cleanLine = strip(line);
 
 			// Skip any line that is empty or just contains whitespace
@@ -186,6 +191,19 @@ class ClientSideFiltering {
 				continue;
 			}
 
+			// Exclusions must precede inclusions because matching is order-dependent.
+			if (cleanLine[0] == '!' || cleanLine[0] == '-') {
+				if (inclusionSeen) {
+					addLogEntry();
+					addLogEntry("ERROR: Invalid 'sync_list' rule ordering at line " ~ to!string(lineNumber) ~ ": " ~ to!string(cleanLine), ["info", "notify"]);
+					addLogEntry("       All exclusion rules ('!' or '-') must appear before inclusion rules. Correct '" ~ filepath ~ "'.", ["info", "notify"]);
+					addLogEntry();
+					return false;
+				}
+			} else {
+				inclusionSeen = true;
+			}
+
 			// Normalise the 'sync_list' rule and store
 			auto normalisedRulePath = buildNormalizedPath(cleanLine);
 			syncListRules ~= normalisedRulePath;
@@ -205,6 +223,7 @@ class ClientSideFiltering {
 		
 		// Close the file post reading it
 		file.close();
+		return true;
 	}
 
 	// return true or false based on if we have loaded any valid sync_list rules
@@ -250,7 +269,13 @@ class ClientSideFiltering {
 		return skipDotfiles;
 	}
 	
-	// Match against 'sync_list' only
+	// Match against 'sync_list' only.
+	// selectiveSync.isPathExcludedViaSyncList() returns:
+	//   true  = excluded by sync_list (outside the selected sync scope)
+	//   false = NOT excluded by sync_list (inside scope, or no valid rules loaded)
+	// IMPORTANT: false is a scope result, NOT an instruction to retain local data.
+	// In --download-only --cleanup-local-files mode an untracked, in-scope local
+	// item may be removed unless another protection applies (for example .nosync).
 	bool isPathExcludedViaSyncList(string path) {
 		// Are there 'sync_list' rules to process?
 		if (count(syncListRules) > 0) {
@@ -401,8 +426,11 @@ class ClientSideFiltering {
 		return false;
 	}
 	
-	// test if the given path is not included in the allowed syncListRules
-	// if there are no allowed syncListRules always return false
+	// Evaluate the given path against the sync_list rule set:
+	//   true  = excluded by sync_list
+	//   false = NOT excluded by sync_list
+	// No valid rules and the logical root itself both return false.
+	// This is a selection decision, not a local-data retention decision.
 	private bool isPathExcluded(string path) {
 		// function variables
 		bool exclude = false;
@@ -584,8 +612,8 @@ class ClientSideFiltering {
 								finalResult = false;
 								// parental path match, break and search rules no more given include rule match
 								break;
-							} else {
-								// Exclude rule
+							} else if (ruleSegments.length <= pathSegments.length) {
+								// Exclude rule: a deeper descendant must not exclude its ancestor
 								{addLogEntry("Evaluation against 'sync_list' rule result: exclusion parent root path match to rule - path to be excluded", ["debug"]);}
 								excludeParentMatched = true;
 								exclude = true;

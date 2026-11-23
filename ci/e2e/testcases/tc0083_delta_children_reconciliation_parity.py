@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import shutil
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from testcases.monitor_case_base import MonitorModeTestCaseBase
@@ -17,6 +20,15 @@ class TestCase0083DeltaChildrenReconciliationParity(MonitorModeTestCaseBase):
     The independent upload-only monitor is essential: moving a directory while
     that monitor is running preserves the existing remote DriveItem identity.
     Standalone upload/delete cycles would not test the same reconciliation path.
+
+    The same reconciliation pass also receives genuine online deletions and a
+    genuine online content modification from the independent mutator, beside an
+    untouched control tree. Both modes must apply the modification, leave the
+    control tree and its database records intact, and converge without feedback.
+    The receiver runs --download-only, so native /delta identifies the online
+    deletions but deliberately retains the local copies and their records, while
+    the generated /children response also retains them locally. Their database
+    presence markers can legitimately remain N after the authoritative sweep.
     """
 
     case_id = "0083"
@@ -69,12 +81,46 @@ class TestCase0083DeltaChildrenReconciliationParity(MonitorModeTestCaseBase):
                 survivor: "TC0083 incoming anchor\n",
                 destination_anchor: "TC0083 destination anchor\n",
             }
+            # Control tree. 'stable' is never touched online, so its files and database
+            # records are the negative control. 'mutable' receives the genuine online
+            # modification and deletions made by the independent mutator.
+            stable_files = {
+                f"{root_name}/control/stable/keep-a.txt": "TC0083 stable top-level control file\n",
+                f"{root_name}/control/stable/Nested/keep-b.txt": "TC0083 stable nested control file\n",
+            }
+            mutable_survivor = f"{root_name}/control/mutable/keep-d.txt"
+            changed_file = f"{root_name}/control/mutable/change-me.txt"
+            changed_before = "TC0083 control content before the online modification\n"
+            changed_after = "TC0083 control content after the online modification, which must be applied\n"
+            deleted_files = {
+                f"{root_name}/control/mutable/delete-me.txt": "TC0083 control file deleted online\n",
+                f"{root_name}/control/mutable/RemoveTree/Deep/child.txt": "TC0083 control file inside a subtree deleted online\n",
+            }
+            deleted_directories = [
+                f"{root_name}/control/mutable/RemoveTree",
+                f"{root_name}/control/mutable/EmptyRemoved",
+            ]
+            deleted_paths = sorted([*deleted_files, *deleted_directories, f"{root_name}/control/mutable/RemoveTree/Deep"])
+            expected_files.update({
+                **stable_files,
+                mutable_survivor: "TC0083 control file beside the online deletions\n",
+                changed_file: changed_after,
+            })
+            control_manifest = [
+                f"{root_name}/control/", f"{root_name}/control/stable/", f"{root_name}/control/stable/Nested/",
+                f"{root_name}/control/mutable/", *stable_files, mutable_survivor, changed_file,
+            ]
             expected_manifest = sorted([
                 f"{root_name}/", f"{root_name}/incoming/", f"{root_name}/moved/",
                 f"{destination_relative}/", f"{destination_relative}/Nested/",
                 f"{destination_relative}/Nested/Deep/", expected_text,
                 expected_xlsx, large_xlsx_relative(expected_xlsx), survivor, destination_anchor,
+                *control_manifest,
             ])
+            # --download-only without --cleanup-local-files archives locally tracked items
+            # deleted online under BOTH native /delta and generated /children enumeration.
+            deleted_manifest = [*deleted_files, f"{deleted_directories[0]}/", f"{deleted_directories[1]}/", f"{root_name}/control/mutable/RemoveTree/Deep/"]
+            subject_expected_manifest = sorted([*expected_manifest, *deleted_manifest])
 
             # The subject must NOT use --single-directory: that option itself
             # selects /children, masking any difference between these modes.
@@ -99,13 +145,23 @@ class TestCase0083DeltaChildrenReconciliationParity(MonitorModeTestCaseBase):
             write_text_file(mutator_root / moved_text, text_contents)
             write_text_file(mutator_root / survivor, expected_files[survivor])
             write_text_file(mutator_root / destination_anchor, expected_files[destination_anchor])
+            for relative, contents in {
+                **stable_files, **deleted_files,
+                mutable_survivor: expected_files[mutable_survivor],
+                changed_file: changed_before,
+            }.items():
+                write_text_file(mutator_root / relative, contents)
+            (mutator_root / deleted_directories[1]).mkdir(parents=True, exist_ok=True)
             create_random_xlsx_pair(
                 mutator_root / moved_xlsx, xlsx_seed,
                 revision=REVISION_0, payload_rows=32,
                 title="TC0083 remote directory move workbook",
             )
 
-            phase_names = ("seed", "subject_initial", "mutator_monitor", "subject_reconcile", "subject_converge", "verify")
+            phase_names = (
+                "seed", "subject_initial", "mutator_monitor", "mutator_changes",
+                "subject_reconcile", "subject_converge", "verify",
+            )
             phase_files = {
                 phase: (scenario_logs / f"{phase}_stdout.log", scenario_logs / f"{phase}_stderr.log")
                 for phase in phase_names
@@ -161,6 +217,15 @@ class TestCase0083DeltaChildrenReconciliationParity(MonitorModeTestCaseBase):
             if validate_xlsx_pair(subject_root / moved_xlsx, REVISION_0):
                 fail("receiver initial XLSX validation failed")
                 continue
+            initial_control_missing = [
+                relative for relative in (
+                    *stable_files, mutable_survivor, changed_file, *deleted_files, deleted_directories[1],
+                ) if not (subject_root / relative).exists()
+            ]
+            if initial_control_missing:
+                scenario_details["initial_control_missing"] = initial_control_missing
+                fail("receiver did not establish the control tree before the online changes")
+                continue
 
             monitor_command = [
                 context.onedrive_bin, "--display-running-config", "--monitor",
@@ -201,6 +266,21 @@ class TestCase0083DeltaChildrenReconciliationParity(MonitorModeTestCaseBase):
                 fail("genuine monitored existing-item remote move was not confirmed")
                 continue
 
+            # Genuine online deletions and a modification, made by the independent mutator
+            # through its own tracked database. The receiver then reconciles them in the
+            # same pass as the directory move.
+            (mutator_root / list(deleted_files)[0]).unlink()
+            shutil.rmtree(mutator_root / deleted_directories[0])
+            (mutator_root / deleted_directories[1]).rmdir()
+            write_text_file(mutator_root / changed_file, changed_after)
+            mutator_changes = phase_run("mutator_changes", [
+                context.onedrive_bin, "--display-running-config", "--sync", "--upload-only",
+                "--verbose", "--single-directory", root_name, "--confdir", str(conf_mutator),
+            ])
+            if mutator_changes.returncode != 0:
+                fail("independent mutator failed to apply the online deletions and modification")
+                continue
+
             reconciled = phase_run("subject_reconcile", subject_command)
             if reconciled.returncode != 0:
                 fail("receiver remote reconciliation failed")
@@ -224,9 +304,28 @@ class TestCase0083DeltaChildrenReconciliationParity(MonitorModeTestCaseBase):
             write_manifest(scenario_state / "verify_manifest.txt", verify_manifest)
             scenario_details["subject_manifest"] = subject_manifest
             scenario_details["verify_manifest"] = verify_manifest
-            if subject_manifest != expected_manifest or verify_manifest != expected_manifest:
+            scenario_details["online_deleted_manifest"] = sorted(deleted_manifest)
+            if subject_manifest != subject_expected_manifest or verify_manifest != expected_manifest:
                 fail("receiver or independent remote manifest differs from expected moved tree")
                 continue
+            # Both paths must identify the missing online objects and deliberately retain
+            # their local copies in download-only archive mode. Validate the actual client
+            # diagnostics, not a message emitted by a different deletion mode.
+            reconcile_output = phase_files["subject_reconcile"][0].read_text(encoding="utf-8", errors="replace")
+            retention_marker = (
+                "Retaining local item absent from online snapshot as --download-only is configured without --cleanup-local-files:"
+                if force_children else
+                "Retaining local item after online deletion as --download-only is configured without --cleanup-local-files:"
+            )
+            retention_lines = [line for line in reconcile_output.splitlines() if retention_marker in line]
+            unconfirmed_deletions = [
+                relative for relative in (*deleted_files, *deleted_directories)
+                if not any(relative in line for line in retention_lines)
+            ]
+            scenario_details["archive_retention_lines"] = retention_lines
+            if unconfirmed_deletions:
+                scenario_details["online_deletions_not_identified"] = unconfirmed_deletions
+                fail("receiver did not confirm archive-mode retention for online deletions")
             for root in (subject_root, verify_root):
                 for relative, content in expected_files.items():
                     if (root / relative).read_text(encoding="utf-8") != content:
@@ -235,17 +334,84 @@ class TestCase0083DeltaChildrenReconciliationParity(MonitorModeTestCaseBase):
                     fail(f"XLSX structure/revision mismatch in {root.name}")
                 if (root / source_relative).exists():
                     fail(f"stale source directory in {root.name}")
+                present_deleted = [relative for relative in deleted_paths if (root / relative).exists()]
+                if root is subject_root:
+                    # The archived local paths must remain, with their original bytes.
+                    missing_archived = sorted(set(deleted_paths) - set(present_deleted))
+                    if missing_archived:
+                        scenario_details["subject_missing_archived_paths"] = missing_archived
+                        fail("download-only receiver removed online-deleted local archive paths")
+                    for relative, original in deleted_files.items():
+                        if (subject_root / relative).read_text(encoding="utf-8") != original:
+                            fail(f"download-only receiver changed archived file content: {relative}")
+                elif present_deleted:
+                    scenario_details["verify_root_deleted_paths_still_present"] = present_deleted
+                    fail("independent verifier found online-deleted items still present remotely")
                 if any("safeBackup" in p.name or ".partial" in p.name for p in root.rglob("*")):
                     fail(f"unexpected backup/partial artifact in {root.name}")
             for phase in ("subject_reconcile", "subject_converge"):
                 combined = "\n".join((phase_files[phase][0].read_text(encoding="utf-8", errors="replace"),
                                        phase_files[phase][1].read_text(encoding="utf-8", errors="replace")))
-                if any(s in combined for s in (
-                    f"Successfully created the remote directory ./{source_relative}",
-                    f"Successfully created the remote directory ./{destination_relative}",
-                    f"Uploading file: ./{moved_text}",
+                if any(marker in combined for marker in (
+                    "Uploading new file:", "Uploading changed file:",
+                    "Uploading modified file:", "Uploading file:",
+                    "Deleting item from Microsoft OneDrive:",
+                    "Successfully deleted the item from Microsoft OneDrive",
+                    "OneDrive Client requested to create this directory online:",
+                    "Successfully created the remote directory",
                 )):
                     fail(f"unintended remote mutation detected in {phase}")
+            # The unchanged convergence pass must not download, recycle or delete anything in the
+            # control tree. The check is limited to that tree because SharePoint may legitimately
+            # re-download Office documents that it enriched after upload.
+            converge_output = "\n".join((phase_files["subject_converge"][0].read_text(encoding="utf-8", errors="replace"),
+                                         phase_files["subject_converge"][1].read_text(encoding="utf-8", errors="replace")))
+            feedback = [
+                line.strip() for line in converge_output.splitlines()
+                if f"{root_name}/control" in line and any(marker in line for marker in (
+                    "Downloading file:", "Moving this local file to the configured 'Recycle Bin'",
+                    "Moving this local directory to the configured 'Recycle Bin'",
+                    "Uploading new file:", "Uploading modified file:", "Deleting item from Microsoft OneDrive:",
+                ))
+            ]
+            if feedback:
+                scenario_details["converge_feedback_lines"] = feedback
+                fail("the unchanged convergence pass performed unintended operations on the control tree")
+
+            # Read the receiver database only after the client has exited, without modifying it.
+            try:
+                records = self._subtree_records(conf_subject / "items.sqlite3", root_name)
+            except (sqlite3.Error, AssertionError) as exc:
+                scenario_details["database_read_error"] = repr(exc)
+                fail(f"receiver database could not be read after the client exited: {exc}")
+                records = {}
+            scenario_details["database_record_count"] = len(records)
+            if records:
+                missing_records = [path for path in (*stable_files, mutable_survivor, changed_file, destination_relative) if path not in records]
+                # An archived local item must keep its database identity. In a generated
+                # /children sweep, missing online items can legitimately remain at N;
+                # only records still present online must be Y.
+                untracked_retained = [path for path in deleted_paths if path not in records]
+                active_out_of_sync = sorted(
+                    path for path, record in records.items()
+                    if path not in deleted_paths and record["syncStatus"] != "Y"
+                )
+                archived_wrong_status = sorted(
+                    path for path in deleted_paths if path in records
+                    and records[path]["syncStatus"] != ("N" if force_children else "Y")
+                )
+                if missing_records:
+                    scenario_details["database_missing_records"] = missing_records
+                    fail("records for untouched or moved items are missing from the receiver database")
+                if untracked_retained:
+                    scenario_details["database_untracked_retained_records"] = untracked_retained
+                    fail("records for local copies retained after online deletion are missing from the receiver database")
+                if archived_wrong_status:
+                    scenario_details["database_archived_wrong_status"] = archived_wrong_status
+                    fail("archived records have unexpected syncStatus for the enumeration mode")
+                if active_out_of_sync:
+                    scenario_details["database_out_of_sync_records"] = active_out_of_sync
+                    fail("records of items still online were left flagged as out-of-sync after convergence")
             self.write_metadata(scenario_state / "metadata.txt", scenario_details)
 
         details["executed_scenarios"] = [key for key in ("CH-0001", "CH-0002") if key in details]
@@ -259,7 +425,36 @@ class TestCase0083DeltaChildrenReconciliationParity(MonitorModeTestCaseBase):
         if len(details["executed_scenarios"]) == 2:
             left = details["CH-0001"].get("subject_manifest")
             right = details["CH-0002"].get("subject_manifest")
-            # Root names differ by scenario; compare only paths underneath each root.
-            if left is None or right is None or [p.split("/", 1)[-1] for p in left] != [p.split("/", 1)[-1] for p in right]:
+            # Both receiver modes retain the same archive paths; compare complete
+            # manifests, normalising only the per-scenario test-root name.
+            if left is None or right is None or [
+                p.split("/", 1)[-1] for p in left
+            ] != [p.split("/", 1)[-1] for p in right]:
                 return self.fail_result(self.case_id, self.name, "delta/children relative manifests differ", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)
+
+    @staticmethod
+    def _subtree_records(database: Path, root_name: str) -> dict[str, dict[str, object]]:
+        # Return every database record beneath (and including) the test-owned root, keyed by its
+        # path relative to the sync root. The database is opened read-only after the client has
+        # exited, and its schema is never modified.
+        with closing(sqlite3.connect(f"file:{database}?mode=ro", uri=True)) as connection:
+            connection.row_factory = sqlite3.Row
+            roots = connection.execute(
+                "SELECT driveId, id, name, type, syncStatus FROM item WHERE name = ? AND type = 'dir'", (root_name,),
+            ).fetchall()
+            if len(roots) != 1:
+                raise AssertionError(f"expected exactly one database record for {root_name}, found {len(roots)}")
+            records: dict[str, dict[str, object]] = {root_name: dict(roots[0])}
+            pending = [(roots[0]["driveId"], roots[0]["id"], root_name)]
+            while pending:
+                drive_id, item_id, path = pending.pop()
+                for child in connection.execute(
+                    "SELECT driveId, id, name, type, syncStatus FROM item WHERE driveId = ? AND parentId = ?",
+                    (drive_id, item_id),
+                ).fetchall():
+                    child_path = f"{path}/{child['name']}"
+                    records[child_path] = dict(child)
+                    if child["type"] != "file":
+                        pending.append((child["driveId"], child["id"], child_path))
+        return records

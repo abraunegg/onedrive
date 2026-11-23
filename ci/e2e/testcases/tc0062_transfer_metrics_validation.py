@@ -261,6 +261,11 @@ class TestCase0062TransferMetricsValidation(E2ETestCase):
                 artifacts,
                 details,
             )
+        downloaded_file = download_root / relative_file
+        if not downloaded_file.is_file() or downloaded_file.stat().st_size != self.TEST_FILE_SIZE_BYTES:
+            return self.fail_result(self.case_id, self.name, "Metrics transfer verification file is missing or has incorrect size", artifacts, details)
+        if downloaded_file.read_bytes() != local_file.read_bytes():
+            return self.fail_result(self.case_id, self.name, "Metrics transfer corrupted downloaded file contents", artifacts, details)
         if not upload_metric_ok:
             return self.fail_result(self.case_id, self.name, upload_metric_reason, artifacts, details)
         if not download_metric_ok:

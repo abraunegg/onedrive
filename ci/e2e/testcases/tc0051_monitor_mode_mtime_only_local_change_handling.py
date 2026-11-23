@@ -426,6 +426,12 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
         details["post_monitor_pdf_validation_error"] = post_monitor_pdf_validation_error
         details["post_monitor_image_validation_error"] = post_monitor_image_validation_error
 
+        # An mtime-only os.utime() change is an attribute update, not a
+        # close-after-write event. The monitor does not promise an immediate
+        # processing cycle for this stimulus. Retain the observed-event details
+        # for diagnosis, but enforce the actual contract below: no unexpected
+        # uploads or remote content/mtime changes.
+
         verify_final_command = [
             context.onedrive_bin,
             "--display-running-config",

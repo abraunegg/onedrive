@@ -53,7 +53,7 @@ class TestCase0001BasicResync(E2ETestCase):
         )
 
         command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--resync",

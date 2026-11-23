@@ -39,7 +39,7 @@ class BusinessSharedFolderTestCase0001CleanSyncPullDown(E2ETestCase):
         metadata_file = layout.state_dir / "metadata.txt"
 
         command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--resync",

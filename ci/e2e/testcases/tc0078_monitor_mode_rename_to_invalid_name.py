@@ -8,7 +8,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, run_command, write_text_file
+from framework.utils import command_to_string, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0078MonitorModeRenameToInvalidName(MonitorModeTestCaseBase):
@@ -107,10 +107,10 @@ class TestCase0078MonitorModeRenameToInvalidName(MonitorModeTestCaseBase):
         }
 
         context.bootstrap_config_dir(conf_main)
-        write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
+        write_onedrive_config(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
 
         context.bootstrap_config_dir(conf_verify)
-        write_text_file(
+        write_onedrive_config(
             conf_verify / "config",
             (
                 "# tc0078 verify\n"
@@ -118,6 +118,10 @@ class TestCase0078MonitorModeRenameToInvalidName(MonitorModeTestCaseBase):
                 'bypass_data_preservation = "true"\n'
             ),
         )
+        # Recheck *after* writing: bootstrap validation alone is insufficient
+        # because overwriting config can silently remove SharePoint drive_id.
+        context.validate_generated_config_dir(conf_main)
+        context.validate_generated_config_dir(conf_verify)
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"

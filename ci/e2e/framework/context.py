@@ -41,21 +41,24 @@ def _parse_scenario_filter_env(raw: str) -> dict[str, set[str]]:
         return {}
 
     decoded = json.loads(raw)
+    if not isinstance(decoded, dict) or not decoded:
+        raise ValueError("E2E_SELECTED_SCENARIOS_JSON must be a non-empty mapping")
     parsed: dict[str, set[str]] = {}
 
     for raw_case_id, raw_scenarios in decoded.items():
         case_id = _normalise_case_id(str(raw_case_id))
         if not case_id:
-            continue
+            raise ValueError("E2E_SELECTED_SCENARIOS_JSON contains an empty case ID")
+        if not isinstance(raw_scenarios, list) or not raw_scenarios:
+            raise ValueError(f"No scenario IDs selected for case '{case_id}'")
 
         scenario_ids: set[str] = set()
         for scenario_id in raw_scenarios:
             scenario_text = str(scenario_id).strip()
-            if scenario_text:
-                scenario_ids.add(scenario_text)
-
-        if scenario_ids:
-            parsed[case_id] = scenario_ids
+            if not scenario_text:
+                raise ValueError(f"Empty scenario ID selected for case '{case_id}'")
+            scenario_ids.add(scenario_text)
+        parsed[case_id] = scenario_ids
 
     return parsed
 
@@ -81,6 +84,7 @@ class E2EContext:
     account_label: str = ""
     selected_case_ids: set[str] = field(default_factory=set)
     selected_scenarios: dict[str, set[str]] = field(default_factory=dict)
+    seen_scenario_candidates: dict[str, set[str]] = field(default_factory=dict)
 
     @classmethod
     def from_environment(cls) -> "E2EContext":
@@ -191,6 +195,11 @@ class E2EContext:
         return set(self.selected_scenarios.get(_normalise_case_id(case_id), set()))
 
     def should_run_scenario(self, case_id: str, scenario_id: str) -> bool:
+        # Record the actual candidates supplied by the test implementation.
+        # This lets the runner reject mistyped/stale scenario selections rather
+        # than reporting a green result after executing zero scenarios.
+        normalised_case_id = _normalise_case_id(case_id)
+        self.seen_scenario_candidates.setdefault(normalised_case_id, set()).add(scenario_id)
         selected = self.selected_scenarios_for_case(case_id)
         if not selected:
             return True

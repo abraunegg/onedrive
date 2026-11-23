@@ -214,6 +214,14 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
                 details,
             )
 
+        # The delete phase is only a valid stimulus if the files were present
+        # after the successful seed. Otherwise absence is not a deletion event.
+        if (not local_target_path.is_file() or not xlsx_pair_all_files(local_xlsx_path)
+                or not pdf_pair_all_files(local_pdf_path) or not image_set_all_files(local_image_path)):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name,
+                "Seed did not establish every file required for delete/recreate stimulus", artifacts, details)
+
         # Phase 2: delete both target files and sync the deletions
         if local_target_path.exists():
             local_target_path.unlink()

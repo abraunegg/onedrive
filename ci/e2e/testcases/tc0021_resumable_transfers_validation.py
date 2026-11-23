@@ -891,7 +891,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         source_change_rejected_seen = (
             "The local file has changed since the upload session was created; "
-            "the existing upload session cannot be resumed"
+            "the existing upload session cannot be continued"
             in combined_phase2_output
         )
         stale_session_cancel_seen = (

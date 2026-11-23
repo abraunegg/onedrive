@@ -36,6 +36,7 @@ import config;
 import log;
 import util;
 import onedrive;
+import curlEngine : UploadSourceIdentity, UploadSourceInvalidException, getUploadSourceIdentity;
 import itemdb;
 import clientSideFiltering;
 import xattr;
@@ -67,6 +68,17 @@ class AccountDetailsException: Exception {
 class SyncException: Exception {
 	@nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__) {
 		super(msg, file, line);
+	}
+}
+
+// A successful OneDrive Personal drive-ID lookup is shared by worker threads.
+// Separate entries allow unrelated drives to resolve without blocking each other.
+private class DriveIdResolutionCacheEntry {
+	Mutex mutex;
+	string resolvedDriveId;
+
+	this() {
+		mutex = new Mutex();
 	}
 }
 
@@ -188,6 +200,10 @@ class SyncEngine {
 	string[] recycleBinMoveFailures;
 	// Associative array mapping of all OneDrive driveId's that have been seen, mapped with DriveDetailsCache data for reference
 	DriveDetailsCache[string] onlineDriveDetails;
+	// Issue #3980: successful drive-ID resolutions are cached per SyncEngine.
+	// The map is protected separately from each entry's per-drive lookup mutex.
+	private Mutex driveIdResolutionCacheMutex;
+	private DriveIdResolutionCacheEntry[string] driveIdResolutionCache;
 	// List of items we fake created when using --dry-run
 	string[2][] idsFaked;
 	// List of paths we fake deleted when using --dry-run
@@ -204,7 +220,10 @@ class SyncEngine {
 	private Mutex fileUploadFailureMutex;
 	// List of path names changed online, but not changed locally when using --dry-run
 	string[] pathsRenamed;
-	// List of path names retained when using --download-only --cleanup-local-files + using a 'sync_list'
+	// Local paths retained during --download-only --cleanup-local-files scanning.
+	// Retention may be due to an existing DB record, client-side filtering
+	// (including sync_list exclusions), symlinks, or an earlier retention decision.
+	// sync_list inclusion alone does NOT protect an untracked in-scope file from cleanup.
 	string[] pathsRetained;
 	// List of paths that were a POSIX case-insensitive match, thus could not be created online
 	string[] posixViolationPaths;
@@ -382,6 +401,36 @@ class SyncEngine {
 		}
 	}
 
+	// Compare an existing online pathname with the local file without consulting
+	// disable_upload_validation.  That option controls verification *after* an
+	// upload, not whether a pre-existing online item contains the same bytes.
+	// An unavailable size/hash is unknown, not a proven mismatch or equality.
+	private bool existingOnlineFileMatchesLocal(const ref JSONValue onlineFile, string localPath, long localSize, out bool comparisonKnown) {
+		comparisonKnown = false;
+		if (!hasFileSize(onlineFile)) return false;
+
+		long remoteSize = onlineFile["size"].integer;
+		comparisonKnown = true;
+		if (remoteSize != localSize) return false;
+		if (localSize == 0) return true;
+
+		if (!hasQuickXorHash(onlineFile)) {
+			comparisonKnown = false;
+			return false;
+		}
+		string remoteHash = onlineFile["file"]["hashes"]["quickXorHash"].str;
+		if (remoteHash.empty) {
+			comparisonKnown = false;
+			return false;
+		}
+		string localHash = computeQuickXorHash(localPath);
+		if (localHash.empty) {
+			comparisonKnown = false;
+			return false;
+		}
+		return localHash == remoteHash;
+	}
+
 	// Replacement/conflict preservation must never remove the canonical pathname
 	// before its replacement is ready. Preserve the existing local file and treat
 	// failure to preserve its bytes as a hard stop for the replacement.
@@ -445,6 +494,17 @@ class SyncEngine {
 		}
 	}
 
+	// sync_root_files applies only to files immediately beneath sync_dir.
+	// Item paths may have a leading "./" or "/" prefix.
+	private bool isLogicalSyncRootFilePath(string itemPath) {
+		if (itemPath.startsWith("./")) {
+			itemPath = itemPath[2 .. $];
+		} else if (itemPath.startsWith("/")) {
+			itemPath = itemPath[1 .. $];
+		}
+		return !itemPath.empty && !itemPath.canFind('/');
+	}
+	
 	// Publish all online-to-local filesystem effects accumulated since the
 	// previous monitor capture. Delegates are invoked outside the mutex.
 	void publishExpectedLocalEffects() {
@@ -540,6 +600,7 @@ class SyncEngine {
 		// download workers to declare their resulting local filesystem events.
 		expectedLocalEffectMutex = new Mutex();
 		fileUploadFailureMutex = new Mutex();
+		driveIdResolutionCacheMutex = new Mutex();
 
 		// Create the specific task pool to process items in parallel
 		processPool = new TaskPool(to!int(appConfig.getValueLong("threads")));
@@ -2252,8 +2313,6 @@ class SyncEngine {
 		}
 	}
 
-
-
 	// Submit one item from a generated /children enumeration into the same bounded
 	// reconciliation path used by native /delta. The generated traversal has already
 	// applied client-side filtering, so this preserves the existing generated-response
@@ -2729,7 +2788,18 @@ class SyncEngine {
 					if (verboseLogging) {addLogEntry("Ignoring online deletion for path protected by .nosync: " ~ protectedLocalPath, ["verbose"]);}
 					if (generatedSimulatedDeltaResponse && (existingDatabaseItem.syncStatus != "Y")) {
 						existingDatabaseItem.syncStatus = "Y";
-						itemDB.upsert(existingDatabaseItem);
+						// Only the presence flag changes here, so only write the 'syncStatus' column
+						itemDB.upgradeSyncStatusFlag(existingDatabaseItem.driveId, existingDatabaseItem.id);
+					}
+				// An online deletion in --download-only mode without cleanup must
+				// preserve the local item and its database identity. This guard
+				// applies only to deletion events: online content updates still
+				// use normal conflict detection and safeBackup handling, unless
+				// bypass_data_preservation is enabled.
+				} else if (appConfig.getValueBool("download_only") && !cleanupLocalFiles) {
+					if (verboseLogging) {
+						string retainedLocalPath = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
+						addLogEntry("Retaining local item after online deletion as --download-only is configured without --cleanup-local-files: " ~ retainedLocalPath, ["verbose"]);
 					}
 				// In fast monitor passes defer deletes from raw /delta tombstones.
 				} else if (shouldDeferDeletedItemsFromRawDelta()) {
@@ -3093,7 +3163,9 @@ class SyncEngine {
 							// How is this item now out of scope?
 							// is sync_list configured
 							if (syncListConfigured) {
-								// sync_list configured and in use
+								// selectiveSync.isPathExcludedViaSyncList() returns:
+								//   true  = excluded by sync_list
+								//   false = NOT excluded by sync_list (no retention guarantee)
 								if (selectiveSync.isPathExcludedViaSyncList(onedriveJSONItem["parentReference"]["name"].str)) {
 									// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
 									if (debugLogging) {addLogEntry("This previously synced item is now excluded from being synced due to sync_list exclusion", ["debug"]);}
@@ -3293,10 +3365,12 @@ class SyncEngine {
 					// What path are we checking?
 					if (debugLogging) {addLogEntry("Path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);}
 
-					// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
+					// selectiveSync.isPathExcludedViaSyncList() returns:
+					//   true  = excluded by sync_list
+					//   false = NOT excluded by sync_list (no retention guarantee)
 					if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 						// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
+						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(newItemPath)) ) {
 							// This is a file
 							// We are configured to sync all files in the root
 							// This is a file in the logical configured root
@@ -3369,7 +3443,8 @@ class SyncEngine {
 				// so do not allow it to remain marked as absent.
 				if (generatedSimulatedDeltaResponse && existingDBEntry && (existingDatabaseItem.syncStatus != "Y")) {
 					existingDatabaseItem.syncStatus = "Y";
-					itemDB.upsert(existingDatabaseItem);
+					// Only the presence flag changes here, so only write the 'syncStatus' column
+					itemDB.upgradeSyncStatusFlag(existingDatabaseItem.driveId, existingDatabaseItem.id);
 				}
 
 				// Preserve the boundary across JSON descendants whose newly-seen parent is
@@ -3395,9 +3470,17 @@ class SyncEngine {
 				// Generated current-state responses use syncStatus as their existing
 				// mark-and-sweep presence flag. Native Full Scan True Up tracks presence
 				// separately in memory and does not write syncStatus for bookkeeping.
+				//
+				// https://github.com/abraunegg/onedrive/issues/3937
+				// Only the presence flag changes here, so only write the 'syncStatus' column, and only when
+				// it is not already set. Updating the full record would also maintain every secondary index
+				// holding it on every pass, even when nothing has changed online. The full-record write only
+				// ever wrote back the values just read from the database, so no other column is affected.
 				if (generatedSimulatedDeltaResponse && existingDBEntry) {
+					if (existingDatabaseItem.syncStatus != "Y") {
+						itemDB.upgradeSyncStatusFlag(existingDatabaseItem.driveId, existingDatabaseItem.id);
+					}
 					existingDatabaseItem.syncStatus = "Y";
-					itemDB.upsert(existingDatabaseItem);
 				}
 
 				// Take the JSON item and create a consumable object for eventual database insertion
@@ -4388,7 +4471,6 @@ class SyncEngine {
 		}
 	}
 
-
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
 	void applyPotentiallyChangedItem(Item existingDatabaseItem, string existingItemPath, Item changedOneDriveItem, string changedItemPath, JSONValue onedriveJSONItem) {
 
@@ -4584,7 +4666,9 @@ class SyncEngine {
 
 				// Add to the local database
 				if (debugLogging) {addLogEntry("Adding changed OneDrive Item to database: " ~ to!string(changedOneDriveItem), ["debug"]);}
-				itemDB.upsert(changedOneDriveItem);
+				// https://github.com/abraunegg/onedrive/issues/3937
+				// A generated /delta response presents every existing item on every pass, so skip the write when the stored record already matches
+				itemDB.upsert(changedOneDriveItem, generatedSimulatedDeltaResponse);
 			}
 		}
 
@@ -6526,6 +6610,18 @@ class SyncEngine {
 						}
 					}
 
+					// Generated /children reconciliation can also discover online
+					// deletions. Archive mode must retain these items locally, just
+					// as it retains them for native /delta tombstones. Keep the
+					// database identity and do not enter the destructive path.
+					if (appConfig.getValueBool("download_only") && !cleanupLocalFiles) {
+						if (verboseLogging) {
+							string retainedLocalPath = computeItemPath(outOfSyncItem.driveId, outOfSyncItem.id);
+							addLogEntry("Retaining local item absent from online snapshot as --download-only is configured without --cleanup-local-files: " ~ retainedLocalPath, ["verbose"]);
+						}
+						continue;
+					}
+
 					if (!dryRun) {
 						// An item absent from a generated authoritative view is semantically the
 						// same online deletion represented by a raw /delta tombstone. For tracked
@@ -6774,6 +6870,24 @@ class SyncEngine {
 			}
 	}
 
+	// Unlike exists(), retain filesystem errors when examining DB-known paths.
+	// A failed lookup must not be mistaken for a local deletion (issue #3958).
+	private bool localPathExistsForConsistency(string localFilePath) {
+		try {
+			getLinkAttributes(localFilePath); // Preserve exists() lstat/symlink semantics
+			return true;
+		} catch (FileException e) {
+			if ((e.errno == ENOENT) || (e.errno == ENOTDIR)) {
+				return false;
+			}
+
+			displayFileSystemErrorMessage(e.msg, "syncEngine.localPathExistsForConsistency", localFilePath, FsErrorSeverity.fatal);
+			addLogEntry("FATAL: Unable to determine whether this local path exists. Aborting to prevent unintended remote deletions: " ~ localFilePath, ["error", "notify"]);
+			forceExit();
+			return true; // Unreachable; never classify an unexpected error as deletion
+		}
+	}
+
 	// Perform the database consistency check on this file item
 	void checkFileDatabaseItemForConsistency(Item dbItem, string localFilePath) {
 		// Function Start Time
@@ -6791,7 +6905,7 @@ class SyncEngine {
 		string itemSource = "database";
 
 		// Does this item|file still exist on disk?
-		if (exists(localFilePath)) {
+		if (localPathExistsForConsistency(localFilePath)) {
 			// Path exists locally, is this path a file?
 			if (isFile(localFilePath)) {
 				// Can we actually read the local file?
@@ -6855,9 +6969,9 @@ class SyncEngine {
 									if (dbItem.type == ItemType.file) {
 										// Not a remote file
 										// Where should the timestamp update be performed ?
-										if (localModifiedTime >= itemModifiedTime) {
+										if ((localModifiedTime >= itemModifiedTime) || appConfig.getValueBool("local_first")) {
 											// Log what is being done
-											if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with a newer local timestamp - correcting online timestamp", ["verbose"]);}
+											if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with a " ~ (localModifiedTime >= itemModifiedTime ? "newer" : "older") ~ " local timestamp - correcting online timestamp", ["verbose"]);}
 											// Correct timestamp
 											uploadLastModifiedTime(dbItem, dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag, true);
 										} else {
@@ -6870,15 +6984,17 @@ class SyncEngine {
 												// dbItem.mtime needs to be updated to be the local timestamp
 												dbItem.mtime = localModifiedTime.toUTC();
 												itemDB.upsert(dbItem);
-											} else {
-												// Not a --upload-only & --local-first scenario
+											} else if (!uploadOnly) {
+												// Normal bidirectional sync may align an older local timestamp.
+												// Upload-only must leave the local filesystem unchanged.
 												// Log what is being done
 												if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with an older local timestamp - correcting local timestamp", ["verbose"]);}
 												// Set the timestamp, logging and error handling done within function
 												setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
 											}
 										}
-									} else {
+									} else if (!uploadOnly) {
+										// Remote/shared files also must not have their local timestamp changed in upload-only.
 										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
 										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);}
 										// Set the timestamp, logging and error handling done within function
@@ -6969,7 +7085,7 @@ class SyncEngine {
 		string itemSource = "database";
 
 		// Does this item|directory still exist on disk?
-		if (exists(localFilePath)) {
+		if (localPathExistsForConsistency(localFilePath)) {
 			// Fix https://github.com/abraunegg/onedrive/issues/1915
 			try {
 				if (!isDir(localFilePath)) {
@@ -7201,7 +7317,13 @@ class SyncEngine {
 		// - skip_dir
 		// - sync_list
 		// - skip_size
-		// Return a true|false response
+		// checkPathAgainstClientSideFiltering() returns:
+		//   true  = excluded by one of the active client-side filters
+		//   false = NOT excluded by these filters (not a retention instruction)
+		// A nonexistent path also returns false without evaluating the filters.
+		// This is a selection check: in --download-only --cleanup-local-files,
+		// an untracked path with a false result is eligible for cleanup unless
+		// some separate protection applies.
 		bool clientSideRuleExcludesPath = false;
 
 		// Reset global syncListDirExcluded
@@ -7320,13 +7442,16 @@ class SyncEngine {
 		if (!clientSideRuleExcludesPath) {
 			if (localFilePath != ".") {
 				if (syncListConfigured) {
-					// sync_list configured and in use
+					// sync_list configured and in use.
+					// selectiveSync.isPathExcludedViaSyncList() returns:
+					//   true  = excluded by sync_list
+					//   false = NOT excluded by sync_list (not a retention instruction)
 					if (selectiveSync.isPathExcludedViaSyncList(localFilePath)) {
-						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (rootName(localFilePath.strip('.').strip('/')) == "")) {
+						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(localFilePath))) {
 							if (debugLogging) {addLogEntry("Not skipping path due to sync_root_files inclusion: " ~ localFilePath, ["debug"]);}
 						} else {
 							if (exists(appConfig.syncListFilePath)){
-								// skipped most likely due to inclusion in sync_list
+								// Excluded by sync_list; a true result means exclusion, not inclusion.
 
 								// is this path a file or directory?
 								if (isFile(localFilePath)) {
@@ -7814,10 +7939,12 @@ class SyncEngine {
 				// What path are we checking against sync_list?
 				if (debugLogging) {addLogEntry("Path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);}
 
-				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
+				// selectiveSync.isPathExcludedViaSyncList() returns:
+				//   true  = excluded by sync_list
+				//   false = NOT excluded by sync_list (no retention guarantee)
 				if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-					if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
+					if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(newItemPath)) ) {
 						// This is a file
 						// We are configured to sync all files in the root
 						// This is a file in the logical root
@@ -7950,10 +8077,6 @@ class SyncEngine {
 		// return if path is excluded
 		return clientSideRuleExcludesPath;
 	}
-
-
-
-
 
 	// Ensure the path passed in, is in the correct format to use when evaluating 'sync_list' rules
 	string ensureStartsWithDotSlash(string inputPath) {
@@ -8878,9 +9001,34 @@ class SyncEngine {
 					!currentOnlineJSONData["eTag"].str.empty &&
 					!dbItem.eTag.empty &&
 					(currentOnlineJSONData["eTag"].str == dbItem.eTag);
+				// Metadata-only eTag changes (such as a move) need not change the file's
+				// contents. Trust the original DB baseline only for the same remote item
+				// when size and an available content hash also match. Otherwise remain
+				// conservative about an older local file overwriting newer online data.
+				bool onlineContentMatchesDatabaseBaseline =
+					uploadOnly && !appConfig.getValueBool("local_first") &&
+					onlineObjectMatchesDatabaseIdentity &&
+					!dbItem.size.empty && hasFileSize(currentOnlineJSONData) &&
+					(dbItem.size == to!string(currentOnlineJSONData["size"].integer)) &&
+					((!dbItem.quickXorHash.empty && hasQuickXorHash(currentOnlineJSONData) &&
+					  dbItem.quickXorHash == currentOnlineJSONData["file"]["hashes"]["quickXorHash"].str) ||
+					 (!dbItem.sha256Hash.empty && hasSHA256Hash(currentOnlineJSONData) &&
+					  dbItem.sha256Hash == currentOnlineJSONData["file"]["hashes"]["sha256Hash"].str));
 				bool trustDatabaseBaseline =
-					onlineUnchangedSinceLastSync &&
+					(onlineUnchangedSinceLastSync || onlineContentMatchesDatabaseBaseline) &&
 					!appConfig.getValueBool("resync");
+
+				// --upload-only without --local-first still uploads a locally newer
+				// revision. Only an older local revision with a genuinely untrusted
+				// remote baseline is a conflict, and it must not change local files.
+				if (uploadOnly && !appConfig.getValueBool("local_first") &&
+				    (localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
+					addLogEntry("WARNING: Skipping upload-only modified-file conflict because the existing online item is authoritative: " ~ localFilePath);
+					modifiedUploadRedirectedByConflictResolution = true;
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
+					return uploadResponse;
+				}
 
 				// Which file is newer? If local is newer, it will be uploaded as a modified file in the correct manner
 				if ((localModifiedTime < onlineModifiedTime) && trustDatabaseBaseline) {
@@ -8892,7 +9040,7 @@ class SyncEngine {
 					}
 				}
 
-				if ((localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
+				if (!uploadOnly && (localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
 					// Online File is actually newer than the locally modified file, or we cannot
 					// safely prove that the online item is unchanged from our database baseline.
 					if (debugLogging) {
@@ -8902,25 +9050,24 @@ class SyncEngine {
 					}
 					addLogEntry("Skipping uploading this item as a locally modified file, will upload as a new file (online file already exists and is newer): " ~ localFilePath);
 
-					// Online is newer. Preserve the local version as an independent safeBackup
-					// snapshot while keeping the canonical filename present, then upload it.
-					string backupPath;
-					if (!safeBackupPreserveForReplacement(localFilePath, false, backupPath, true)) {
-						uploadFileOneDriveApiInstance.releaseCurlEngine();
-						uploadFileOneDriveApiInstance = null;
-						return uploadResponse;
+					// In bidirectional mode the newer online version wins. Preserve the
+					// local revision only when preservation has NOT been bypassed.
+					// Without preservation there is no backupPath to upload.
+					if (!bypassDataPreservation) {
+						string backupPath;
+						if (!safeBackupPreserveForReplacement(localFilePath, false, backupPath, true)) {
+							uploadFileOneDriveApiInstance.releaseCurlEngine();
+							uploadFileOneDriveApiInstance = null;
+							return uploadResponse;
+						}
+						uploadNewFile(backupPath);
+					} else {
+						addLogEntry("Data preservation bypassed; replacing the conflicting local file from online without creating a safeBackup: " ~ localFilePath);
 					}
-					uploadNewFile(backupPath);
 
-					// Keep the existing DB baseline tied to the canonical file until the newer
-					// online bytes have actually been committed locally. The local version is
-					// already preserved above, so this replacement may skip preserving that
-					// known difference while still detecting an edit made during the download.
-					if (!uploadOnly) {
-						downloadFileItem(currentOnlineJSONData, true);
-					} else if (verboseLogging) {
-						addLogEntry("Upload-only mode: retaining the original canonical file locally because the newer online file will not be downloaded", ["verbose"]);
-					}
+					// Only the bidirectional path reaches here; retain the existing
+					// canonical-file replacement/reconciliation mechanism.
+					downloadFileItem(currentOnlineJSONData, true);
 
 					// The original modified-file upload was intentionally not performed. Tell the
 					// caller that this item was redirected through conflict resolution so the empty
@@ -9455,9 +9602,11 @@ class SyncEngine {
 						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 					} else {
 						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
-						// Set the cleanup flag
-						cleanupDataPass = true;
 					}
+				}
+				// Set cleanup mode independently of progress logging.
+				if (cleanupLocalFiles) {
+					cleanupDataPass = true;
 				}
 			}
 		}
@@ -9727,9 +9876,14 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 
-		// Skip symlinks as early as possible, including dangling symlinks
+		// Skip symlinks as early as possible, including dangling symlinks.
+		// A cleanup pass must never traverse or remove a symlink, regardless of
+		// the independent skip_symlinks option. Log the actual reason for the skip.
 		if (isSymlink(path)) {
-			// Should this path be skipped?
+			if (cleanupDataPass) {
+				if (verboseLogging) {addLogEntry("Skipping symbolic link during --download-only --cleanup-local-files cleanup pass: " ~ path, ["verbose"]);}
+				return;
+			}
 			if (appConfig.getValueBool("skip_symlinks")) {
 				if (verboseLogging) {addLogEntry("Skipping item - skip symbolic links configured: " ~ path, ["verbose"]);}
 				return;
@@ -9845,10 +9999,12 @@ class SyncEngine {
 				// - sync_list
 				// - skip_size
 				if (!unwanted) {
-					// If this is not the cleanup data pass when using --download-only --cleanup-local-files we dont want to exclude files we need to delete locally when using 'sync_list'
-					if (!cleanupDataPass) {
-						unwanted = checkPathAgainstClientSideFiltering(path);
-					}
+					// checkPathAgainstClientSideFiltering() returns:
+					//   true  = excluded by active filtering, including sync_list
+					//   false = NOT excluded (potentially eligible for cleanup)
+					// Do NOT treat a false result as a direction to retain the file.
+					// Excluded paths remain outside local cleanup scope.
+					unwanted = checkPathAgainstClientSideFiltering(path);
 				}
 
 				// Check this path against the Microsoft Naming Conventions & Restrictions
@@ -9870,6 +10026,7 @@ class SyncEngine {
 			if (!unwanted) {
 				// At this point, this path, we want to scan for new data as it is not excluded
 				if (isDir(path)) {
+					bool cleanupParentAfterTraversal = false;
 					// Was the path found in the database?
 					if (!itemFoundInDB) {
 						// Path not found in database when searching all drive id's
@@ -9880,8 +10037,9 @@ class SyncEngine {
 							if (debugLogging) {addLogEntry("Adding path to create online (directory inclusion): " ~ path, ["debug"]);}
 							addPathToCreateOnline(path);
 						} else {
-							// we need to clean up this directory
-							if (verboseLogging) {addLogEntry("Attempting removal of local directory as --download-only & --cleanup-local-files configured", ["verbose"]);}
+							// Assess this DB-unknown directory and its children for cleanup.
+							// No filesystem removal has been attempted at this point.
+							if (verboseLogging) {addLogEntry("Evaluating untracked local directory for cleanup due to --download-only --cleanup-local-files operation: " ~ path, ["verbose"]);}
 
 							// Remove any children of this path if they still exist
 							// Resolve 'Directory not empty' error when deleting local files
@@ -9902,25 +10060,28 @@ class SyncEngine {
 										if (verboseLogging) {addLogEntry("Path already marked for retention - retaining path: " ~ normalisedChildPath, ["verbose"]);}
 									}
 
-									// 2. If not already retained, evaluate via sync_list
-									if (pathShouldBeRemoved && syncListConfigured) {
-										// selectiveSync.isPathExcludedViaSyncList() returns:
-										//   true  = excluded by sync_list
-										//   false = included / must be retained
-										if (!selectiveSync.isPathExcludedViaSyncList(child.name)) {
-											pathShouldBeRemoved = false;
-											if (verboseLogging) {addLogEntry("Path retained due to 'sync_list' inclusion: " ~ normalisedChildPath, ["verbose"]);}
-										}
+									// 2. Only an untracked, in-scope, non-symlink child may be removed.
+									// checkPathAgainstClientSideFiltering() returns:
+									//   true  = excluded by filtering (outside cleanup scope)
+									//   false = NOT excluded (cleanup may proceed if otherwise eligible)
+									// Evaluate protections in the original short-circuit order.
+									if (pathShouldBeRemoved && pathFoundInDatabase(normalisedChildPath)) {
+										pathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Retaining local child tracked in database during cleanup: " ~ normalisedChildPath, ["verbose"]);}
+									}
+									if (pathShouldBeRemoved && isSymlink(child.name)) {
+										pathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Retaining local symbolic link during cleanup: " ~ normalisedChildPath, ["verbose"]);}
+									}
+									if (pathShouldBeRemoved && checkPathAgainstClientSideFiltering(child.name)) {
+										pathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Retaining local child excluded by client-side filtering during cleanup: " ~ normalisedChildPath, ["verbose"]);}
 									}
 
 									// What action should be taken?
 									if (pathShouldBeRemoved) {
-										// Path should be removed
-										if (isDir(child.name)) {
-											if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ normalisedChildPath, ["verbose"]);}
-										} else {
-											if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedChildPath, ["verbose"]);}
-										}
+										// This child passed the cleanup eligibility checks.
+										// A removal attempt is logged only at the filesystem operation.
 
 										// Are we in a --dry-run scenario?
 										if (!dryRun) {
@@ -9928,15 +10089,27 @@ class SyncEngine {
 											if (exists(child.name)) {
 												try {
 													if (attrIsDir(child.linkAttributes)) {
+														if (!dirEntries(child.name, SpanMode.shallow).empty) {
+															if (verboseLogging) {addLogEntry("Local directory not removed because it is not empty: " ~ normalisedChildPath, ["verbose"]);}
+															continue;
+														}
+														if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ normalisedChildPath, ["verbose"]);}
 														rmdir(child.name);
 														if (!exists(child.name)) notifyExpectedLocalRemoval(child.name);
-														// Log removal
-														if (verboseLogging) {addLogEntry("Removed local directory: " ~ normalisedChildPath, ["verbose"]);}
+														// Only report success once the directory is actually absent.
+														if (verboseLogging) {
+															if (!exists(child.name)) {addLogEntry("Removed local directory: " ~ normalisedChildPath, ["verbose"]);}
+															else {addLogEntry("Local directory remains after removal attempt: " ~ normalisedChildPath, ["verbose"]);}
+														}
 													} else {
+														if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedChildPath, ["verbose"]);}
 														safeRemove(child.name);
 														if (!exists(child.name)) notifyExpectedLocalRemoval(child.name);
-														// Log removal
-														if (verboseLogging) {addLogEntry("Removed local file: " ~ normalisedChildPath, ["verbose"]);}
+														// Report removal only if the file actually disappeared.
+														if (verboseLogging) {
+															if (!exists(child.name)) {addLogEntry("Removed local file: " ~ normalisedChildPath, ["verbose"]);}
+															else {addLogEntry("Local file remains after removal attempt: " ~ normalisedChildPath, ["verbose"]);}
+														}
 													}
 												} catch (FileException e) {
 													displayFileSystemErrorMessage(e.msg, thisFunctionName, normalisedChildPath);
@@ -9944,12 +10117,8 @@ class SyncEngine {
 											}
 										}
 									} else {
-										// Path should be retained
-										if (isDir(child.name)) {
-											if (verboseLogging) {addLogEntry("Local directory should be retained due to 'sync_list' inclusion: " ~ child.name, ["verbose"]);}
-										} else {
-											if (verboseLogging) {addLogEntry("Local file should be retained due to 'sync_list' inclusion: " ~ child.name, ["verbose"]);}
-										}
+										// The protection that caused retention was logged above.
+										// Do not misattribute retention to sync_list inclusion.
 
 										// Add this path to the retention list if not already present
 										if (!canFind(pathsRetained, normalisedChildPath)) {
@@ -9969,15 +10138,11 @@ class SyncEngine {
 								string normalisedParentPath = ensureStartsWithDotSlash(buildNormalizedPath(path));
 								string parentPrefix = normalisedParentPath ~ "/";
 
-								// 1. sync_list evaluation for the parent path itself
-								if (syncListConfigured) {
-									// selectiveSync.isPathExcludedViaSyncList() returns:
-									//   true  = excluded by sync_list
-									//   false = included / must be retained
-									if (!selectiveSync.isPathExcludedViaSyncList(path)) {
-										parentalPathShouldBeRemoved = false;
-										if (verboseLogging) {addLogEntry("Parent path retained due to 'sync_list' inclusion: " ~ path, ["verbose"]);}
-									}
+								// 1. An excluded parent is outside cleanup scope.
+								// true = excluded; false = NOT excluded (not automatic retention).
+								if (checkPathAgainstClientSideFiltering(path)) {
+									parentalPathShouldBeRemoved = false;
+									if (verboseLogging) {addLogEntry("Parent path retained outside cleanup scope: " ~ path, ["verbose"]);}
 								}
 
 								// 2. If parent path exists in the database, it must be retained
@@ -9998,27 +10163,12 @@ class SyncEngine {
 								}
 
 								// What action should be taken?
-								if (parentalPathShouldBeRemoved) {
-									// Remove the parental path now that it is empty of children
-									if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ path, ["verbose"]);}
-
-									// are we in a --dry-run scenario?
-									if (!dryRun) {
-										// No --dry-run ... process local delete
-										if (exists(path)) {
-											try {
-												rmdirRecurse(path);
-												if (!exists(path)) notifyExpectedLocalRemoval(path);
-												if (verboseLogging) {addLogEntry("Removed local directory: " ~ path, ["verbose"]);}
-
-											} catch (FileException e) {
-												displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
-											}
-										}
-									}
+								if (parentalPathShouldBeRemoved && path != ".") {
+									cleanupParentAfterTraversal = true;
 								} else {
-									// Path needs to be retained
-									if (verboseLogging) {addLogEntry("Local parent directory should be retained due to 'sync_list' inclusion: " ~ path, ["verbose"]);}
+									// Retention conditions were logged above. The sync root (".") is
+									// also never eligible for local cleanup.
+									if (verboseLogging && path == ".") {addLogEntry("Retaining local synchronisation root; never a cleanup target: " ~ path, ["verbose"]);}
 
 									// Add the parent path to the retention list if not already present
 									if (!canFind(pathsRetained, normalisedParentPath)) {
@@ -10068,6 +10218,31 @@ class SyncEngine {
 							}
 						}
 					}
+
+					// Remove an eligible empty parent only after its children were processed.
+					if (cleanupParentAfterTraversal) {
+						// This parent is a candidate; removal occurs only when actually empty.
+
+						// are we in a --dry-run scenario?
+						if (!dryRun) {
+							// No --dry-run ... process local delete
+							if (exists(path) && dirEntries(path, SpanMode.shallow).empty) {
+								try {
+									if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ path, ["verbose"]);}
+									rmdir(path);
+									if (!exists(path)) notifyExpectedLocalRemoval(path);
+									if (verboseLogging) {
+										if (!exists(path)) {addLogEntry("Removed local directory: " ~ path, ["verbose"]);}
+										else {addLogEntry("Local directory remains after removal attempt: " ~ path, ["verbose"]);}
+									}
+
+								} catch (FileException e) {
+									displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
+								}
+							}
+						}
+					}
+
 				} else {
 					// https://github.com/abraunegg/onedrive/issues/984
 					// path is not a directory, is it a valid file?
@@ -10131,33 +10306,35 @@ class SyncEngine {
 									if (verboseLogging) {addLogEntry("Path already marked for retention - retaining path: " ~ normalisedFilePath, ["verbose"]);}
 								}
 
-								// 2. If not already retained, evaluate via sync_list
-								if (pathShouldBeRemoved && syncListConfigured) {
-									// selectiveSync.isPathExcludedViaSyncList() returns:
-									//   true  = excluded by sync_list
-									//   false = included / must be retained
-									if (!selectiveSync.isPathExcludedViaSyncList(path)) {
-										pathShouldBeRemoved = false;
-										if (verboseLogging) {addLogEntry("Path retained due to 'sync_list' inclusion: " ~ normalisedFilePath, ["verbose"]);}
-									}
+								// 2. A file outside the active selection is never a cleanup candidate.
+								// true = excluded; false = NOT excluded (cleanup may proceed).
+								if (pathShouldBeRemoved && checkPathAgainstClientSideFiltering(path)) {
+									pathShouldBeRemoved = false;
+									if (verboseLogging) {addLogEntry("Path retained outside cleanup scope: " ~ normalisedFilePath, ["verbose"]);}
 								}
 
 								// What action should be taken?
 								if (pathShouldBeRemoved) {
-									// we need to clean up this file
+									// This is an untracked, in-scope file eligible for cleanup.
+									// Explicitly report WHY the client reached this cleanup action.
+									// "Attempting" records the configured intent, not filesystem success.
+									// Keep the path-specific attempt and verified outcome logs below.
 									if (verboseLogging) {addLogEntry("Attempting removal of local file as --download-only & --cleanup-local-files configured", ["verbose"]);}
-									// are we in a --dry-run scenario?
-									if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedFilePath, ["verbose"]);}
 									if (!dryRun) {
 										// No --dry-run ... process local file delete
+										if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedFilePath, ["verbose"]);}
 										safeRemove(path);
 										if (!exists(path)) notifyExpectedLocalRemoval(path);
-										// Log removal
-										if (verboseLogging) {addLogEntry("Removed local file: " ~ normalisedFilePath, ["verbose"]);}
+										// Log success only if the file is actually absent.
+										if (verboseLogging) {
+											if (!exists(path)) {addLogEntry("Removed local file: " ~ normalisedFilePath, ["verbose"]);}
+											else {addLogEntry("Local file remains after removal attempt: " ~ normalisedFilePath, ["verbose"]);}
+										}
 									}
 								} else {
-									// Path should be retained
-									if (verboseLogging) {addLogEntry("Local file should be retained due to 'sync_list' inclusion: " ~ normalisedFilePath, ["verbose"]);}
+									// Retention reason was logged above: a previous retention decision
+									// or a true client-side filtering result (excluded from cleanup).
+									// sync_list inclusion by itself does not require retention.
 
 									// Add this path to the retention list if not already present
 									if (!canFind(pathsRetained, normalisedFilePath)) {
@@ -11461,12 +11638,23 @@ class SyncEngine {
 									throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 								}
 
+								// Issue #3930: a path lookup can also return a misrouted DriveItem.
+								// Reject it before any database write, remote modification or local removal.
+								if (!validateNewFileUploadDestination(fileDetailsFromOneDrive, parentItem, fileToUpload))
+									throw new JsonResponseException("Microsoft Graph returned an unexpected destination for an existing-file lookup");
+
 								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
 								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
 								if (verboseLogging) {addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);}
 
-								// Does the data from online match our local file that we are attempting to upload as a new file?
-								if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
+								// Compare the already-existing online item independently of the
+								// post-upload integrity-validation setting. Preserve the old
+								// comparison semantics outside upload-only mode.
+								bool comparisonKnown = false;
+								bool sameContent = uploadOnly
+									? existingOnlineFileMatchesLocal(fileDetailsFromOneDrive, fileToUpload, thisFileSize, comparisonKnown)
+									: (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize));
+								if (sameContent) {
 									// Need a check here around the 'upload_only' and 'remove_source_files'
 									// Are we in an --upload-only & --remove-source-files scenario?
 									if ((uploadOnly) && (localDeleteAfterUpload)) {
@@ -11483,69 +11671,108 @@ class SyncEngine {
 										saveItem(fileDetailsFromOneDrive);
 									}
 								} else {
-									// The local file we are attempting to upload as a new file is different to the existing file online
-									if (debugLogging) {addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);}
-
-									// Issue #2626 | Case 2-2 (resync)
-
-									// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially constituting online data loss
-									// The file 'version history' online will have to be used to 'recover' the prior online file
-									string changedItemParentDriveId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
-									string changedItemId = fileDetailsFromOneDrive["id"].str;
-									addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
-
-									// In order for the processing of the local item as a 'changed' item, unfortunately we need to save the online data of the existing online file to the local DB
-									saveItem(fileDetailsFromOneDrive);
-
-									// Which file is technically newer? The local file or the remote file?
-									Item onlineFile = makeItem(fileDetailsFromOneDrive);
-									SysTime localModifiedTime;
-									try {
-										localModifiedTime = timeLastModified(fileToUpload).toUTC();
-									} catch (FileException exception) {
-										if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
-											addLogEntry("File disappeared locally before new-file conflict timestamp comparison: " ~ fileToUpload);
-										} else {
-											displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
-										}
-										return;
+									// A non-match may be a verified difference or an unknown
+									// comparison (unavailable hash/metadata). Never assert that
+									// the bytes differ merely because validation is disabled.
+									if (debugLogging && uploadOnly && !comparisonKnown) {
+										addLogEntry("Existing online file content comparison is inconclusive: " ~ fileToUpload, ["debug"]);
 									}
-									SysTime onlineModifiedTime = onlineFile.mtime;
-
-									// Reduce time resolution to seconds before comparing
-									localModifiedTime.fracSecs = Duration.zero;
-									onlineModifiedTime.fracSecs = Duration.zero;
-
-									// Which file is newer?
-									if (localModifiedTime >= onlineModifiedTime) {
-										// Upload the locally modified file as-is, as it is newer
-										uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
-									} else {
-										// Online is newer. Preserve the local version as an independent safeBackup
-										// snapshot while keeping the canonical filename present, then upload it.
-										string backupPath;
-										if (!safeBackupPreserveForReplacement(fileToUpload, false, backupPath, true)) {
+									// Without --local-first, a newer local file must still replace
+									// an older remote one. Preserve second-resolution comparison used
+									// by the existing modified-file collision path.
+									bool onlineNewer = false;
+									if (uploadOnly && !appConfig.getValueBool("local_first")) {
+										SysTime localModifiedTime;
+										try {
+											localModifiedTime = timeLastModified(fileToUpload).toUTC();
+										} catch (FileException exception) {
+											if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+												addLogEntry("File disappeared locally before new-file conflict timestamp comparison: " ~ fileToUpload);
+											} else {
+												displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+											}
 											return;
 										}
-										uploadNewFile(backupPath);
-
-										// This path saved the online item above only to establish its identity. Remove
-										// that temporary DB association before replacement so an interruption still
-										// leaves the canonical local file discoverable as an unmatched item on retry.
-										itemDB.deleteById(changedItemParentDriveId, changedItemId);
-
-										// The local bytes have already been preserved. Apply the authoritative online
-										// file now, while still preserving any new edit made during this download.
-										// Upload-only mode deliberately performs no download; the canonical local file
-										// therefore remains present and the missing DB association keeps the conflict
-										// visible for a future non-upload-only reconciliation.
-										if (!uploadOnly) {
-											downloadFileItem(fileDetailsFromOneDrive, true);
-										} else if (verboseLogging) {
-											addLogEntry("Upload-only mode: retaining the original canonical file locally because the newer online file will not be downloaded", ["verbose"]);
-										}
+										SysTime onlineModifiedTime = makeItem(fileDetailsFromOneDrive).mtime;
+										localModifiedTime.fracSecs = Duration.zero;
+										onlineModifiedTime.fracSecs = Duration.zero;
+										onlineNewer = localModifiedTime < onlineModifiedTime;
 									}
-								}
+									if (onlineNewer) {
+										// A newer remote item wins in ordinary upload-only mode.
+										// Do not create a backup, replace it, or mark differing bytes synced.
+										addLogEntry("WARNING: Skipping upload-only new-file collision because the existing online item is newer: " ~ fileToUpload);
+										zeroDataTraversal = true;
+									} else {
+										if (debugLogging) {addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);}
+
+										// Issue #2626 | Case 2-2 (resync)
+
+										// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially constituting online data loss
+										// The file 'version history' online will have to be used to 'recover' the prior online file
+										string changedItemParentDriveId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
+										string changedItemId = fileDetailsFromOneDrive["id"].str;
+										addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
+
+										// In order for the processing of the local item as a 'changed' item, unfortunately we need to save the online data of the existing online file to the local DB
+										saveItem(fileDetailsFromOneDrive);
+
+										// --upload-only --local-first selects the canonical local
+										// content regardless of online timestamps; use the existing
+										// modified-file upload and database/eTag handling.
+										if (uploadOnly) {
+											// Local-first always uploads; ordinary upload-only reaches here
+											// only when its local timestamp is not older than online.
+											uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
+										} else {
+											// Which file is technically newer? The local file or the remote file?
+											Item onlineFile = makeItem(fileDetailsFromOneDrive);
+											SysTime localModifiedTime;
+											try {
+												localModifiedTime = timeLastModified(fileToUpload).toUTC();
+											} catch (FileException exception) {
+												if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+													addLogEntry("File disappeared locally before new-file conflict timestamp comparison: " ~ fileToUpload);
+												} else {
+													displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+												}
+												return;
+											}
+											SysTime onlineModifiedTime = onlineFile.mtime;
+
+											// Reduce time resolution to seconds before comparing
+											localModifiedTime.fracSecs = Duration.zero;
+											onlineModifiedTime.fracSecs = Duration.zero;
+
+											// Which file is newer?
+											if (localModifiedTime >= onlineModifiedTime) {
+												// Upload the locally modified file as-is, as it is newer
+												uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
+											} else {
+												// Bidirectional reconciliation: online is newer. When
+												// preservation is bypassed, do not create/upload any backup.
+												if (!bypassDataPreservation) {
+													string backupPath;
+													if (!safeBackupPreserveForReplacement(fileToUpload, false, backupPath, true)) {
+														return;
+													}
+													uploadNewFile(backupPath);
+												} else {
+													addLogEntry("Data preservation bypassed; replacing the conflicting local file from online without creating a safeBackup: " ~ fileToUpload);
+												}
+
+												// This path saved the online item above only to establish its identity. Remove
+												// that temporary DB association before replacement so an interruption still
+												// leaves the canonical local file discoverable as an unmatched item on retry.
+												itemDB.deleteById(changedItemParentDriveId, changedItemId);
+
+												// Apply the authoritative online item. Data preservation is
+												// optional, as specified by bypass_data_preservation.
+												downloadFileItem(fileDetailsFromOneDrive, true);
+											}
+										}
+									} // end local-first conflict handling
+								} // end online-authoritative conflict handling
 							} catch (OneDriveException exception) {
 								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 								checkFileOneDriveApiInstance.releaseCurlEngine();
@@ -11629,6 +11856,30 @@ class SyncEngine {
 		}
 	}
 
+	// Issue #3930: a successful HTTP response is not proof that Graph created
+	// the requested file. Validate the returned DriveItem before DB writes or
+	// source removal. No additional API request or DB lookup is required.
+	bool validateNewFileUploadDestination(JSONValue response, Item parentItem, string localPath) {
+		if (response.type() != JSONType.object || !hasName(response) ||
+			!hasParentReferenceId(response) || !hasParentReferenceDriveId(response)) {
+			addLogEntry("ERROR: Microsoft Graph upload response missing required destination identity for: " ~ localPath, ["error"]);
+			return false;
+		}
+
+		string returnedName = response["name"].str;
+		string returnedParentId = response["parentReference"]["id"].str;
+		string returnedDriveId = response["parentReference"]["driveId"].str;
+		if (returnedName == baseName(localPath) && returnedParentId == parentItem.id &&
+			icmp(returnedDriveId, parentItem.driveId) == 0) return true;
+
+		addLogEntry("ERROR: Microsoft Graph API upload destination mismatch for: " ~ localPath, ["error"]);
+		addLogEntry("Expected: name='" ~ baseName(localPath) ~ "', parentId='" ~ parentItem.id ~ "', driveId='" ~ parentItem.driveId ~ "'", ["error"]);
+		addLogEntry("Returned: name='" ~ returnedName ~ "', parentId='" ~ returnedParentId ~ "', driveId='" ~ returnedDriveId ~ "'", ["error"]);
+		addLogEntry("The upload transferred data, but the API created an unexpected remote item. No database association will be saved; --resync cannot correct this API defect.", ["error"]);
+		addLogEntry("Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/1934 for further details.", ["error"]);
+		return false;
+	}
+
 	// Perform the actual upload to OneDrive
 	bool performNewFileUpload(Item parentItem, string fileToUpload, long thisFileSize, ref bool zeroDataTraversal) {
 		// Function Start Time
@@ -11703,7 +11954,7 @@ class SyncEngine {
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUpload(fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload));
 					uploadTransferEndTime = Clock.currTime();
 					uploadFailed = false;
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+
 
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -11807,7 +12058,7 @@ class SyncEngine {
 								// exitHandlerTriggered triggered
 								if (uploadResponse.type() == JSONType.object) {
 									uploadFailed = false;
-									addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+				
 								} else {
 									addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 									uploadFailed = true;
@@ -11844,6 +12095,15 @@ class SyncEngine {
 			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 		}
 
+		// Verify the Graph-returned destination for every account type before any
+		// database update, metadata operation or local source deletion. A successful
+		// HTTP status is insufficient when the returned item is in another folder.
+		if (!dryRun && !uploadFailed && !zeroDataTraversal &&
+			!validateNewFileUploadDestination(uploadResponse, parentItem, fileToUpload)) {
+			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed (Graph destination mismatch)!", ["info", "notify"]);
+			return true;
+		}
+
 		// If a real upload occurred, calculate transfer metrics, perform integrity validation
 		if (!uploadFailed && !zeroDataTraversal) {
 			// Upload did not fail ...
@@ -11852,6 +12112,9 @@ class SyncEngine {
 
 			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to contain the required upload fields
 			if ((uploadResponse.type() == JSONType.object) && (hasId(uploadResponse)) && (hasETag(uploadResponse))) {
+				if (!dryRun) {
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+				}
 				// check if the path still exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally already
 				if (exists(fileToUpload)) {
 					// Are we in a --dry-run scenario
@@ -11988,10 +12251,12 @@ class SyncEngine {
 		// Preserve the full filesystem timestamp precision here; the timestamp sent
 		// to Microsoft Graph below is intentionally normalised separately.
 		long sourceFileSize;
+		UploadSourceIdentity sourceIdentity;
 		SysTime localFileLastModifiedTime;
 		string sourceFileMtime;
 		try {
-			sourceFileSize = getSize(fileToUpload);
+			sourceIdentity = getUploadSourceIdentity(fileToUpload);
+			sourceFileSize = sourceIdentity.size;
 			localFileLastModifiedTime = timeLastModified(fileToUpload).toUTC();
 			sourceFileMtime = localFileLastModifiedTime.toISOExtString();
 		} catch (FileException exception) {
@@ -12026,6 +12291,8 @@ class SyncEngine {
 				uploadSession["localPath"] = fileToUpload;
 				uploadSession["sourceFileSize"] = JSONValue(sourceFileSize);
 				uploadSession["sourceFileMtime"] = sourceFileMtime;
+				uploadSession["sourceFileDevice"] = to!string(sourceIdentity.device);
+				uploadSession["sourceFileInode"] = to!string(sourceIdentity.inode);
 				uploadSession["targetDriveId"] = parentDriveId;
 				uploadSession["targetParentId"] = parentId;
 
@@ -12119,14 +12386,22 @@ class SyncEngine {
 			return false;
 		}
 
+		if (!("sourceFileDevice" in uploadSessionData) || (uploadSessionData["sourceFileDevice"].type() != JSONType.string) ||
+			!("sourceFileInode" in uploadSessionData) || (uploadSessionData["sourceFileInode"].type() != JSONType.string)) {
+			return false; // Old persisted sessions cannot safely supply inode identity.
+		}
+
 		string localPath = uploadSessionData["localPath"].str;
-		currentFileSize = getSize(localPath);
+		UploadSourceIdentity currentSource = getUploadSourceIdentity(localPath);
+		currentFileSize = currentSource.size;
 		string currentFileMtime = timeLastModified(localPath).toUTC().toISOExtString();
 
 		if ((currentFileSize != uploadSessionData["sourceFileSize"].integer) ||
-			(currentFileMtime != uploadSessionData["sourceFileMtime"].str)) {
+			(currentFileMtime != uploadSessionData["sourceFileMtime"].str) ||
+			(to!string(currentSource.device) != uploadSessionData["sourceFileDevice"].str) ||
+			(to!string(currentSource.inode) != uploadSessionData["sourceFileInode"].str)) {
 			if (verboseLogging) {
-				addLogEntry("The local file has changed since the upload session was created; the existing upload session cannot be resumed: " ~ localPath, ["verbose"]);
+				addLogEntry("The local file has changed since the upload session was created; the existing upload session cannot be continued: " ~ localPath, ["verbose"]);
 			}
 			if (debugLogging) {
 				addLogEntry("SESSION-RESUME: Persisted source size: " ~ to!string(uploadSessionData["sourceFileSize"].integer) ~ ", current source size: " ~ to!string(currentFileSize), ["debug"]);
@@ -12144,11 +12419,21 @@ class SyncEngine {
 		// including the local source identity captured when that replacement session was created.
 		if (!hasUploadURL(replacementUploadSession) || !hasNextExpectedRanges(replacementUploadSession) || !hasLocalPath(replacementUploadSession) ||
 			!("sourceFileSize" in replacementUploadSession) || (replacementUploadSession["sourceFileSize"].type() != JSONType.integer) ||
-			!("sourceFileMtime" in replacementUploadSession) || (replacementUploadSession["sourceFileMtime"].type() != JSONType.string) || replacementUploadSession["sourceFileMtime"].str.empty) {
+			!("sourceFileMtime" in replacementUploadSession) || (replacementUploadSession["sourceFileMtime"].type() != JSONType.string) || replacementUploadSession["sourceFileMtime"].str.empty ||
+			!("sourceFileDevice" in replacementUploadSession) || (replacementUploadSession["sourceFileDevice"].type() != JSONType.string) ||
+			!("sourceFileInode" in replacementUploadSession) || (replacementUploadSession["sourceFileInode"].type() != JSONType.string)) {
 			return false;
 		}
 
 		if (!("expirationDateTime" in replacementUploadSession) || (replacementUploadSession["expirationDateTime"].type != JSONType.string)) {
+			return false;
+		}
+
+		// A Graph session replacement must not silently switch source revisions.
+		if (uploadSessionData["sourceFileSize"].integer != replacementUploadSession["sourceFileSize"].integer ||
+			uploadSessionData["sourceFileMtime"].str != replacementUploadSession["sourceFileMtime"].str ||
+			uploadSessionData["sourceFileDevice"].str != replacementUploadSession["sourceFileDevice"].str ||
+			uploadSessionData["sourceFileInode"].str != replacementUploadSession["sourceFileInode"].str) {
 			return false;
 		}
 
@@ -12158,6 +12443,8 @@ class SyncEngine {
 		uploadSessionData["localPath"] = replacementUploadSession["localPath"];
 		uploadSessionData["sourceFileSize"] = replacementUploadSession["sourceFileSize"];
 		uploadSessionData["sourceFileMtime"] = replacementUploadSession["sourceFileMtime"];
+		uploadSessionData["sourceFileDevice"] = replacementUploadSession["sourceFileDevice"];
+		uploadSessionData["sourceFileInode"] = replacementUploadSession["sourceFileInode"];
 		uploadSessionData["expirationDateTime"] = replacementUploadSession["expirationDateTime"];
 		uploadSessionData["nextExpectedRanges"] = replacementUploadSession["nextExpectedRanges"];
 
@@ -12169,6 +12456,14 @@ class SyncEngine {
 		// Persist one coherent session record: replacement URL and replacement progress together.
 		saveSessionFile(threadUploadSessionFilePath, uploadSessionData);
 		return true;
+	}
+
+	// Discard an unsafe in-process upload without changing the local source.
+	JSONValue discardChangedUploadSession(string sessionFilePath, string localPath) {
+		addLogEntry("WARNING: Local upload source changed or could not be read; discarding upload session: " ~ localPath);
+		if (!dryRun) cancelUploadSessionIfPresent(sessionFilePath);
+		if (exists(sessionFilePath) && !dryRun) safeRemove(sessionFilePath);
+		return JSONValue.init;
 	}
 
 	// Perform the upload of file via the Upload Session that was created
@@ -12219,6 +12514,30 @@ class SyncEngine {
 		size_t fragmentCount = 0;
 		long fragSize = 0;
 
+		// The Graph session's recorded size is authoritative. Do not resize a live session.
+		long currentSourceSize;
+		try {
+			if (!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize) ||
+				(thisFileSize != uploadSessionData["sourceFileSize"].integer)) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+			}
+		} catch (FileException exception) {
+			return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+		}
+		UploadSourceIdentity expectedSource;
+		try {
+			expectedSource = getUploadSourceIdentity(uploadSessionData["localPath"].str);
+			// Revalidate after capturing the exact stat data used for fstat() comparisons.
+			if ((to!string(expectedSource.device) != uploadSessionData["sourceFileDevice"].str) ||
+				(to!string(expectedSource.inode) != uploadSessionData["sourceFileInode"].str) ||
+				(expectedSource.size != thisFileSize) ||
+				!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize)) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+			}
+		} catch (FileException exception) {
+			return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+		}
+
 		// Extract current upload offset from session data
 		long offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!long;
 
@@ -12230,6 +12549,14 @@ class SyncEngine {
 
 		// Start the session upload using the active API instance for this thread
 		while (true) {
+			// Check source revision between fragments (including after Graph retries).
+			try {
+				if (!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize)) {
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+				}
+			} catch (FileException exception) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+			}
 			// fragment upload
 			fragmentCount++;
 			if (debugLogging) {addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);}
@@ -12270,8 +12597,11 @@ class SyncEngine {
 					uploadSessionData["localPath"].str,
 					offset,
 					fragSize,
-					thisFileSize
+					thisFileSize,
+					expectedSource
 				);
+			} catch (UploadSourceInvalidException exception) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 			} catch (OneDriveException exception) {
 				// if a 100 uploadResponse is generated, continue
 				if (exception.httpStatusCode == 100) {
@@ -12306,11 +12636,7 @@ class SyncEngine {
 					}
 
 					if (verboseLogging) {addLogEntry("Unable to continue upload because the replacement upload session is invalid", ["verbose"]);}
-					if (exists(threadUploadSessionFilePath)) {
-						safeRemove(threadUploadSessionFilePath);
-					}
-					uploadResponse = null;
-					return uploadResponse;
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 				}
 
 				// There was an error uploadResponse from OneDrive when uploading the file fragment
@@ -12336,11 +12662,7 @@ class SyncEngine {
 					}
 
 					if (verboseLogging) {addLogEntry("Unable to continue upload because the replacement upload session is invalid", ["verbose"]);}
-					if (exists(threadUploadSessionFilePath)) {
-						safeRemove(threadUploadSessionFilePath);
-					}
-					uploadResponse = null;
-					return uploadResponse;
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 				}
 
 				// Issue https://github.com/abraunegg/onedrive/issues/2747
@@ -12380,6 +12702,10 @@ class SyncEngine {
 							effectiveLocalPath = uploadSessionData["localPath"].str;
 						}
 
+						// Never retry against a local source that changed while Graph responded.
+						if (!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize)) {
+							return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+						}
 						// retry the fragment upload
 						if (verboseLogging) {addLogEntry("Retrying fragment upload", ["verbose"]);}
 						uploadResponse = activeOneDriveApiInstance.uploadFragment(
@@ -12387,13 +12713,18 @@ class SyncEngine {
 							effectiveLocalPath,
 							offset,
 							fragSize,
-							thisFileSize
+							thisFileSize,
+							expectedSource
 						);
 					} else {
 						// newUploadSession not a JSON
 						uploadResponse = null;
 						return uploadResponse;
 					}
+				} catch (UploadSourceInvalidException e) {
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+				} catch (FileException e) {
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 				} catch (OneDriveException e) {
 					// OneDrive threw another error on retry
 					if (verboseLogging) {addLogEntry("Retry to upload fragment failed", ["verbose"]);}
@@ -12413,6 +12744,15 @@ class SyncEngine {
 				displayFileSystemErrorMessage(e.msg, thisFunctionName, uploadSessionData["localPath"].str);
 				uploadResponse = null;
 				return uploadResponse;
+			}
+
+			// Check again after transmission, including a final Graph commit response.
+			try {
+				if (!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize)) {
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+				}
+			} catch (FileException exception) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 			}
 
 			// was the fragment uploaded without issue?
@@ -12796,7 +13136,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// Mark the existing generated-response database subtree out-of-sync without
 	// retaining an account-wide Item[] snapshot. This preserves the traversal order
@@ -13360,48 +13699,93 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 
-		// What are we doing
-		if (debugLogging) {
-			string fetchRealValueLogMessage = format("Fetching actual online 'driveId' value for '%s'", inputDriveId);
-			addLogEntry(fetchRealValueLogMessage, ["debug"]);
+		// Normalise only for identity comparison and cache lookup. A Personal
+		// drive ID can be uppercase or omit its leading zero (Issues #3336, #3072).
+		string cacheKey = toLower(inputDriveId);
+		if ((appConfig.accountType == "personal") && (cacheKey.length == 15)) {
+			cacheKey = to!string(cacheKey.padLeft('0', 16));
 		}
 
-		// variables for this function
-		JSONValue remoteDriveDetails;
-		OneDriveApi fetchDriveDetailsOneDriveApiInstance;
+		// getDefaultDriveDetails() has already validated and normalised the
+		// account's own drive ID at startup. Do not look it up again. This
+		// also covers its 15-character and mixed-case Graph representations.
+		if ((appConfig.accountType == "personal") && !appConfig.defaultDriveId.empty && (cacheKey == appConfig.defaultDriveId)) {
+			if (debugLogging) {
+				addLogEntry("Using validated default 'driveId' value for '" ~ inputDriveId ~ "'", ["debug"]);
+			}
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			return appConfig.defaultDriveId;
+		}
+
+		// For other drives (shared folders), the first resolution still needs
+		// Graph validation. Cache only successful responses, and retry errors.
+		DriveIdResolutionCacheEntry cacheEntry;
+		if (!inputDriveId.empty) {
+			driveIdResolutionCacheMutex.lock();
+			try {
+				auto existingEntry = cacheKey in driveIdResolutionCache;
+				if (existingEntry !is null) {
+					cacheEntry = *existingEntry;
+				} else {
+					cacheEntry = new DriveIdResolutionCacheEntry();
+					driveIdResolutionCache[cacheKey] = cacheEntry;
+				}
+			} finally {
+				driveIdResolutionCacheMutex.unlock();
+			}
+			// One in-flight Graph lookup per drive; different drives run in parallel.
+			cacheEntry.mutex.lock();
+		}
+
 		string outputDriveId;
-
-		// Create new OneDrive API Instance
-		fetchDriveDetailsOneDriveApiInstance = new OneDriveApi(appConfig);
-		fetchDriveDetailsOneDriveApiInstance.initialise();
-
-		// Get root details for the provided driveId
 		try {
-			remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId);
-		} catch (OneDriveException exception) {
-			if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId) generated a OneDriveException", ["debug"]);}
-			// Default operation if not 408,429,503,504 errors
-			// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
-			// Display what the error is
-			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+			if ((cacheEntry !is null) && !cacheEntry.resolvedDriveId.empty) {
+				// Reuse only an identity obtained from a successful Graph response.
+				outputDriveId = cacheEntry.resolvedDriveId;
+				if (debugLogging) {
+					addLogEntry("Using cached actual online 'driveId' value for '" ~ inputDriveId ~ "'", ["debug"]);
+				}
+			} else {
+				if (debugLogging) {
+					addLogEntry(format("Fetching actual online 'driveId' value for '%s'", inputDriveId), ["debug"]);
+				}
+
+				JSONValue remoteDriveDetails;
+				OneDriveApi fetchDriveDetailsOneDriveApiInstance;
+
+				// Preserve the existing request, Graph retry and error fallback behaviour.
+				fetchDriveDetailsOneDriveApiInstance = new OneDriveApi(appConfig);
+				fetchDriveDetailsOneDriveApiInstance.initialise();
+				try {
+					remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId);
+				} catch (OneDriveException exception) {
+					if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId) generated a OneDriveException", ["debug"]);}
+					// 408,429,503,504 retry handling remains inside OneDriveApi.
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				}
+
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
+				fetchDriveDetailsOneDriveApiInstance = null;
+
+				if (hasParentReferenceDriveId(remoteDriveDetails)) {
+					outputDriveId = remoteDriveDetails["parentReference"]["driveId"].str;
+					// Never cache a fallback, a missing field or an empty response.
+					if ((cacheEntry !is null) && !outputDriveId.empty) {
+						cacheEntry.resolvedDriveId = outputDriveId;
+					}
+				} else {
+					outputDriveId = inputDriveId;
+				}
+				remoteDriveDetails = null;
+			}
+		} finally {
+			if (cacheEntry !is null) {
+				cacheEntry.mutex.unlock();
+			}
 		}
-
-		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-		fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
-		fetchDriveDetailsOneDriveApiInstance = null;
-
-		// Do we have details we can use?
-		if (hasParentReferenceDriveId(remoteDriveDetails)) {
-			// We have a [parentReference][driveId] reference driveId to use
-			outputDriveId = remoteDriveDetails["parentReference"]["driveId"].str;
-		} else {
-			// We dont have a value from online we can use
-			// Test existing driveId length and validation
-			outputDriveId = inputDriveId;
-		}
-
-		// The required driveId string has been extracted; the JSON response is no longer needed.
-		remoteDriveDetails = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -16400,8 +16784,6 @@ class SyncEngine {
 		}
 	}
 
-
-
 	// Query OneDrive for file details of a given path, returning either the 'webURL' or 'lastModifiedBy' JSON facet
 	void queryOneDriveForFileDetails(string inputFilePath, string runtimePath, string outputType) {
 		// Function Start Time
@@ -16829,7 +17211,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// Cancel a Microsoft Graph upload session recorded in a local session_upload.* file
 	void cancelUploadSessionIfPresent(string sessionFilePath) {

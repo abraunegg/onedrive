@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import signal
+import subprocess
 import time
 from pathlib import Path
 
@@ -76,6 +78,80 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         ]
         return [marker for marker in bad_markers if marker in log_segment]
 
+
+    # ------------------------------------------------------------------
+    # Rename-race coverage (Issue #3948 (history #3941))
+    #
+    # A directory that is created and renamed before the monitor processes its
+    # IN_CREATE event must still end up with an inotify watch, and in-sync files
+    # moved into it afterwards must be propagated as moves. To make both events
+    # arrive in one batch deterministically, the monitor process is stopped with
+    # SIGSTOP around a real mkdir + rename, then resumed. The kernel queues the
+    # inotify events while the process is stopped; nothing synthetic is injected.
+    # ------------------------------------------------------------------
+    RENAME_RACE_WATCH_SETTLE_SECONDS = 5
+
+    def _directory_has_inotify_watch(self, pid: int, directory: Path) -> tuple[bool, dict[str, object]]:
+        """Return whether the client process holds an inotify watch on the directory's inode.
+
+        Read from /proc/<pid>/fdinfo for every inotify file descriptor. Linux only;
+        on other platforms the result is (False, {"supported": False}).
+        """
+        info: dict[str, object] = {"supported": False, "inotify_fds": 0, "watch_count": 0}
+        fd_dir = Path(f"/proc/{pid}/fd")
+        if not fd_dir.is_dir():
+            return False, info
+        info["supported"] = True
+        try:
+            inode = directory.stat().st_ino
+        except OSError as exc:
+            info["stat_error"] = str(exc)
+            return False, info
+        info["inode"] = inode
+        found = False
+        for fd_entry in fd_dir.iterdir():
+            try:
+                if os.readlink(fd_entry) != "anon_inode:inotify":
+                    continue
+            except OSError:
+                continue
+            info["inotify_fds"] = int(info["inotify_fds"]) + 1
+            fdinfo = Path(f"/proc/{pid}/fdinfo/{fd_entry.name}")
+            try:
+                lines = fdinfo.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                continue
+            for line in lines:
+                if not line.startswith("inotify "):
+                    continue
+                info["watch_count"] = int(info["watch_count"]) + 1
+                for token in line.split():
+                    if token.startswith("ino:"):
+                        try:
+                            if int(token[4:], 16) == inode:
+                                found = True
+                        except ValueError:
+                            pass
+        return found, info
+
+    def _create_and_rename_directory_while_monitor_stopped(
+        self,
+        process: subprocess.Popen[str],
+        temporary_dir: Path,
+        final_dir: Path,
+    ) -> None:
+        """Create temporary_dir and rename it to final_dir while the monitor is stopped.
+
+        SIGSTOP guarantees the IN_CREATE for temporary_dir and the IN_MOVED_FROM/IN_MOVED_TO
+        pair are read by the client in the same batch, after temporary_dir no longer exists.
+        """
+        process.send_signal(signal.SIGSTOP)
+        try:
+            temporary_dir.mkdir(parents=False, exist_ok=False)
+            temporary_dir.rename(final_dir)
+        finally:
+            process.send_signal(signal.SIGCONT)
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -107,6 +183,12 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         dir_source_relative = f"{root_name}/Pictures/2005"
         dir_destination_relative = f"{root_name}/Pictures/Year/2005"
         dir_destination_parent_anchor_relative = f"{root_name}/Pictures/Year/anchor.txt"
+        race_parent_relative = f"{root_name}/RenameRace"
+        race_temporary_dir_relative = f"{race_parent_relative}/Untitled Folder"
+        race_final_dir_relative = f"{race_parent_relative}/Renamed"
+        race_file_names = ["race-001.txt", "race-002.txt", "race-003.txt"]
+        race_file_source_relatives = [f"{race_parent_relative}/{name}" for name in race_file_names]
+        race_file_destination_relatives = [f"{race_final_dir_relative}/{name}" for name in race_file_names]
         dir_file_relative_paths = [
             f"{dir_source_relative}/photo-root-001.txt",
             f"{dir_source_relative}/photo-root-002.txt",
@@ -126,6 +208,8 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         dir_source_path = sync_root / dir_source_relative
         dir_destination_path = sync_root / dir_destination_relative
         dir_destination_parent_anchor_path = sync_root / dir_destination_parent_anchor_relative
+        race_temporary_dir_path = sync_root / race_temporary_dir_relative
+        race_final_dir_path = sync_root / race_final_dir_relative
 
         file_destination_verify_path = verify_root / file_destination_relative
         file_source_verify_path = verify_root / file_source_relative
@@ -147,6 +231,10 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         )
         file_anchor_content = "TC0060 destination directory anchor for file move\n"
         dir_anchor_content = "TC0060 destination parent anchor for directory move\n"
+        race_file_contents = {
+            relative: f"TC0060 rename-race file {index + 1}\n"
+            for index, relative in enumerate(race_file_source_relatives)
+        }
         dir_file_contents = {
             dir_file_relative_paths[0]: "TC0060 root photo 001\n",
             dir_file_relative_paths[1]: "TC0060 root photo 002\n",
@@ -181,6 +269,8 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         write_text_file(file_destination_anchor_path, file_anchor_content)
         write_text_file(dir_destination_parent_anchor_path, dir_anchor_content)
         for relative_path, content in dir_file_contents.items():
+            write_text_file(sync_root / relative_path, content)
+        for relative_path, content in race_file_contents.items():
             write_text_file(sync_root / relative_path, content)
 
         monitor_stdout = case_log_dir / "monitor_stdout.log"
@@ -223,6 +313,10 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
             "dir_source_relative": dir_source_relative,
             "dir_destination_relative": dir_destination_relative,
             "dir_file_relative_paths": dir_file_relative_paths,
+            "race_temporary_dir_relative": race_temporary_dir_relative,
+            "race_final_dir_relative": race_final_dir_relative,
+            "race_file_source_relatives": race_file_source_relatives,
+            "race_file_destination_relatives": race_file_destination_relatives,
             "sync_root": str(sync_root),
             "verify_root": str(verify_root),
             "conf_main": str(conf_main),
@@ -399,6 +493,59 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
             details["mutation_required_patterns"] = required_patterns
             details["post_mutation_bad_markers"] = self._contains_bad_move_side_effects(post_mutation_log_segment)
             details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
+
+            # ---- Rename-race phase (Issue #3948 (history #3941)) ----
+            race_processed = False
+            race_moves_processed = False
+            race_log_segment = ""
+            if mutation_processed and not details["post_mutation_bad_markers"]:
+                race_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+                context.log(
+                    f"Test Case {self.case_id}: creating and renaming directory while the monitor is stopped: "
+                    f"{race_temporary_dir_relative} -> {race_final_dir_relative}"
+                )
+                self._create_and_rename_directory_while_monitor_stopped(process, race_temporary_dir_path, race_final_dir_path)
+                race_required_patterns = [
+                    # Proves the race was exercised: IN_CREATE was processed after the rename.
+                    f"Not adding non-existing/disappeared directory: ./{race_temporary_dir_relative}",
+                    f"[M] Local item moved: ./{race_temporary_dir_relative} -> ./{race_final_dir_relative}",
+                    f"Successfully created the remote directory ./{race_final_dir_relative} on Microsoft OneDrive",
+                ]
+                race_processed, race_log_segment = self._wait_for_stdout_growth_patterns(
+                    monitor_stdout,
+                    start_offset=race_log_start_offset,
+                    required_patterns=race_required_patterns,
+                    timeout_seconds=180,
+                )
+                details["race_processed"] = race_processed
+                details["race_required_patterns"] = race_required_patterns
+                if race_processed:
+                    time.sleep(self.RENAME_RACE_WATCH_SETTLE_SECONDS)
+                    race_watched, race_watch_info = self._directory_has_inotify_watch(process.pid, race_final_dir_path)
+                    details["race_final_dir_watched"] = race_watched
+                    details["race_watch_info"] = race_watch_info
+                    if race_watched or not race_watch_info.get("supported", False):
+                        race_moves_start_offset = len(self._read_stdout(monitor_stdout))
+                        context.log(f"Test Case {self.case_id}: moving in-sync files into the renamed directory: {race_file_source_relatives}")
+                        for source_relative, destination_relative in zip(race_file_source_relatives, race_file_destination_relatives):
+                            (sync_root / source_relative).rename(sync_root / destination_relative)
+                        race_move_patterns = [
+                            value
+                            for source_relative, destination_relative in zip(race_file_source_relatives, race_file_destination_relatives)
+                            for value in (
+                                f"[M] Local item moved: ./{source_relative} -> ./{destination_relative}",
+                                f"Moving ./{source_relative} to ./{destination_relative}",
+                            )
+                        ]
+                        race_moves_processed, race_moves_segment = self._wait_for_stdout_growth_patterns(
+                            monitor_stdout,
+                            start_offset=race_moves_start_offset,
+                            required_patterns=race_move_patterns,
+                            timeout_seconds=180,
+                        )
+                        details["race_moves_processed"] = race_moves_processed
+                        details["race_move_patterns"] = race_move_patterns
+                        details["race_bad_markers"] = self._contains_bad_move_side_effects(race_moves_segment)
         finally:
             self._shutdown_monitor_process(process, details)
 
@@ -606,6 +753,68 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                 self.case_id,
                 self.name,
                 f"Remote verification found moved directory descendant content mismatches: {content_mismatches}",
+                artifacts,
+                details,
+            )
+
+        if not details.get("race_processed", False):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Monitor did not process the created-then-renamed directory as a rename with the IN_CREATE race exercised",
+                artifacts,
+                details,
+            )
+
+        race_watch_info = details.get("race_watch_info", {})
+        if isinstance(race_watch_info, dict) and race_watch_info.get("supported", False) and not details.get("race_final_dir_watched", False):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Renamed directory has no inotify watch after the create/rename race was processed: {race_final_dir_relative}",
+                artifacts,
+                details,
+            )
+
+        if not details.get("race_moves_processed", False):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Monitor did not log the file moves into the renamed directory as moves",
+                artifacts,
+                details,
+            )
+
+        race_bad_markers = details.get("race_bad_markers", [])
+        if race_bad_markers:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Moves into the renamed directory logged delete/re-upload side effects: {race_bad_markers}",
+                artifacts,
+                details,
+            )
+
+        race_source_leftovers = [relative for relative in race_file_source_relatives if (verify_root / relative).exists()]
+        if race_source_leftovers:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification still contains rename-race move sources: {race_source_leftovers}",
+                artifacts,
+                details,
+            )
+        race_destination_mismatches = [
+            destination_relative
+            for source_relative, destination_relative in zip(race_file_source_relatives, race_file_destination_relatives)
+            if not (verify_root / destination_relative).is_file()
+            or (verify_root / destination_relative).read_text(encoding="utf-8") != race_file_contents[source_relative]
+        ]
+        if race_destination_mismatches:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification is missing or has wrong content for rename-race destinations: {race_destination_mismatches}",
                 artifacts,
                 details,
             )

@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import os
-import shutil
 import time
 from pathlib import Path
 
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.pdf import REVISION_1 as PDF_REVISION_1, REVISION_2 as PDF_REVISION_2, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, set_pdf_pair_mtime, copy_pdf_pair, pdf_pair_hashes, pdf_pair_backup_files, validate_pdf_pair_backups, pdf_pair_backup_hashes
-from framework.image import REVISION_1 as IMAGE_REVISION_1, REVISION_2 as IMAGE_REVISION_2, create_random_image_set, mutate_image_set_revision, validate_image_set, set_image_set_mtime, copy_image_set, image_set_hashes, image_set_backup_files, validate_image_set_backups, image_set_backup_hashes
+from framework.pdf import REVISION_1 as PDF_REVISION_1, REVISION_2 as PDF_REVISION_2, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, set_pdf_pair_mtime, copy_pdf_pair
+from framework.image import REVISION_1 as IMAGE_REVISION_1, REVISION_2 as IMAGE_REVISION_2, create_random_image_set, mutate_image_set_revision, validate_image_set, set_image_set_mtime, copy_image_set
+from framework.manifest import snapshot_tree, diff_tree_snapshots, write_tree_snapshot
 from framework.utils import reset_directory, write_text_file
-from framework.xlsx import REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, set_xlsx_pair_mtime, copy_xlsx_pair, xlsx_pair_hashes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes
+from framework.xlsx import REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, set_xlsx_pair_mtime, copy_xlsx_pair
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -19,7 +19,7 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
     name = "safeBackup new-file upload collision validation"
     description = (
         "Validate with passive TXT plus real XLSX/PDF documents and PNG/JPEG image payloads that the no-database/new-local-file collision path "
-        "under upload-only preserves older local files without replacing their canonical pathnames when newer "
+        "under upload-only preserves every local payload path without a safeBackup when newer "
         "same-name online files already exist"
     )
 
@@ -87,10 +87,6 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
         set_xlsx_pair_mtime(local_xlsx, (old_epoch, old_epoch))
         set_pdf_pair_mtime(local_pdf, (old_epoch, old_epoch))
         set_image_set_mtime(local_image, (old_epoch, old_epoch))
-        local_text_hash = self._hash_if_file(local_text)
-        local_xlsx_hashes = xlsx_pair_hashes(local_xlsx, self._hash_if_file)
-        local_pdf_hashes = pdf_pair_hashes(local_pdf, self._hash_if_file)
-        local_image_hashes = image_set_hashes(local_image, self._hash_if_file)
 
         # Build the newer online XLSX from the exact local package, then change only the
         # revision marker. This gives the collision two realistic related document versions
@@ -107,11 +103,13 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
 
         seed_stdout, seed_stderr = logs / "seed_stdout.log", logs / "seed_stderr.log"
         collision_stdout, collision_stderr = logs / "collision_stdout.log", logs / "collision_stderr.log"
+        repeat_stdout, repeat_stderr = logs / "repeat_stdout.log", logs / "repeat_stderr.log"
         verify_stdout, verify_stderr = logs / "verify_stdout.log", logs / "verify_stderr.log"
         metadata_file = state / "metadata.txt"
         artifacts = [
             str(seed_stdout), str(seed_stderr),
             str(collision_stdout), str(collision_stderr),
+            str(repeat_stdout), str(repeat_stderr),
             str(verify_stdout), str(verify_stderr),
             str(metadata_file),
         ]
@@ -154,183 +152,88 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
                 details=details,
             )
 
+        # The remote seed is complete; there are no further fixture writes to
+        # this local tree until after the subject sync has been observed.
+        before_file = state / "local_before.json"
+        after_file = state / "local_after.json"
+        repeat_file = state / "local_after_repeat.json"
+        diff_file = state / "local_immutability_differences.txt"
+        artifacts.extend(map(str, (before_file, after_file, repeat_file, diff_file)))
+        before = snapshot_tree(local_root)
+        write_tree_snapshot(before_file, before)
         collision = self._run_phase(
-            context,
-            label="new-file upload-only collision",
-            command=self._single_directory_command(
-                context,
-                root_name=root_name,
-                config_dir=conf_local,
-                mode="upload-only",
-                verbose_count=2,
-            ),
-            stdout_file=collision_stdout,
-            stderr_file=collision_stderr,
+            context, label="new-file upload-only collision",
+            command=self._single_directory_command(context, root_name=root_name, config_dir=conf_local, mode="upload-only", verbose_count=2),
+            stdout_file=collision_stdout, stderr_file=collision_stderr,
         )
-
-        text_backups = self._safe_backup_files_for(local_text)
-        xlsx_backups = xlsx_pair_backup_files(local_xlsx, self._safe_backup_files_for)
-        pdf_backups = pdf_pair_backup_files(local_pdf, self._safe_backup_files_for)
-        image_backups = image_set_backup_files(local_image, self._safe_backup_files_for)
-        local_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_1) if local_xlsx.is_file() else "Local canonical XLSX is missing"
-        local_pdf_error = validate_pdf_pair(local_pdf, PDF_REVISION_1) if local_pdf.is_file() else "Local canonical PDF is missing"
-        local_image_error = validate_image_set(local_image, IMAGE_REVISION_1) if local_image.is_file() else "Local canonical image set is missing"
-        backup_xlsx_error = validate_xlsx_pair_backups(xlsx_backups, REVISION_1)
-        backup_pdf_error = validate_pdf_pair_backups(pdf_backups, PDF_REVISION_1)
-        backup_image_error = validate_image_set_backups(image_backups, IMAGE_REVISION_1)
-        details.update(
-            {
-                "collision_returncode": collision.returncode,
-                "canonical_text_content": self._text_if_file(local_text),
-                "canonical_text_hash": self._hash_if_file(local_text),
-                "canonical_xlsx_hashes": xlsx_pair_hashes(local_xlsx, self._hash_if_file),
-                "canonical_xlsx_validation_error": local_xlsx_error,
-                "canonical_pdf_hashes": pdf_pair_hashes(local_pdf, self._hash_if_file),
-                "canonical_pdf_validation_error": local_pdf_error,
-                "canonical_image_hashes": image_set_hashes(local_image, self._hash_if_file),
-                "canonical_image_validation_error": local_image_error,
-                "local_text_hash": local_text_hash,
-                "local_xlsx_hashes": local_xlsx_hashes,
-                "local_pdf_hashes": local_pdf_hashes,
-                "local_image_hashes": local_image_hashes,
-                "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
-                "text_safe_backup_hashes": [self._hash_if_file(p) for p in text_backups],
-                "xlsx_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups.items()},
-                "xlsx_safe_backup_hashes": xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file),
-                "xlsx_safe_backup_validation_error": backup_xlsx_error,
-                "pdf_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in pdf_backups.items()},
-                "pdf_safe_backup_hashes": pdf_pair_backup_hashes(pdf_backups, self._hash_if_file),
-                "pdf_safe_backup_validation_error": backup_pdf_error,
-                "image_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in image_backups.items()},
-                "image_safe_backup_hashes": image_set_backup_hashes(image_backups, self._hash_if_file),
-                "image_safe_backup_validation_error": backup_image_error,
-            }
-        )
+        after = snapshot_tree(local_root)
+        write_tree_snapshot(after_file, after)
+        differences = diff_tree_snapshots(before, after)
+        repeated = None
+        if not differences and collision.returncode == 0:
+            repeated = self._run_phase(
+                context, label="new-file upload-only collision repeated unchanged",
+                command=self._single_directory_command(context, root_name=root_name, config_dir=conf_local, mode="upload-only"),
+                stdout_file=repeat_stdout, stderr_file=repeat_stderr,
+            )
+            after_repeat = snapshot_tree(local_root)
+            write_tree_snapshot(repeat_file, after_repeat)
+            differences.extend(diff_tree_snapshots(before, after_repeat))
+        else:
+            write_text_file(repeat_stdout, "SKIPPED: first upload-only run failed the immutability gate\n")
+            write_text_file(repeat_stderr, "")
+            write_text_file(repeat_file, '{"skipped": true, "reason": "first run failed"}\n')
+        details.update({
+            "collision_returncode": collision.returncode,
+            "repeat_returncode": repeated.returncode if repeated is not None else "skipped_after_first_failure",
+            "local_immutability_differences": differences,
+        })
+        write_text_file(diff_file, "\n".join(differences) + ("\n" if differences else ""))
 
         verify = self._run_phase(
-            context,
-            label="verify remote",
-            command=self._single_directory_command(
-                context,
-                root_name=root_name,
-                config_dir=conf_verify,
-                mode="download-only",
-                resync=True,
-            ),
-            stdout_file=verify_stdout,
-            stderr_file=verify_stderr,
+            context, label="verify remote",
+            command=self._single_directory_command(context, root_name=root_name, config_dir=conf_verify, mode="download-only", resync=True),
+            stdout_file=verify_stdout, stderr_file=verify_stderr,
         )
-        remote_text_backups = self._safe_backup_files_for(verify_text)
-        remote_xlsx_backups = xlsx_pair_backup_files(verify_xlsx, self._safe_backup_files_for)
-        remote_pdf_backups = pdf_pair_backup_files(verify_pdf, self._safe_backup_files_for)
-        remote_image_backups = image_set_backup_files(verify_image, self._safe_backup_files_for)
-        verify_xlsx_error = validate_xlsx_pair(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification canonical XLSX is missing"
-        verify_pdf_error = validate_pdf_pair(verify_pdf, PDF_REVISION_2) if verify_pdf.is_file() else "Verification canonical PDF is missing"
-        verify_image_error = validate_image_set(verify_image, IMAGE_REVISION_2) if verify_image.is_file() else "Verification canonical image set is missing"
-        remote_xlsx_backup_error = validate_xlsx_pair_backups(remote_xlsx_backups, REVISION_1)
-        remote_pdf_backup_error = validate_pdf_pair_backups(remote_pdf_backups, PDF_REVISION_1)
-        remote_image_backup_error = validate_image_set_backups(remote_image_backups, IMAGE_REVISION_1)
-        details.update(
-            {
-                "verify_returncode": verify.returncode,
-                "verify_canonical_text": self._text_if_file(verify_text),
-                "verify_xlsx_validation_error": verify_xlsx_error,
-                "verify_pdf_validation_error": verify_pdf_error,
-                "verify_image_validation_error": verify_image_error,
-                "verify_text_safe_backup_files": [str(p.relative_to(verify_root)) for p in remote_text_backups],
-                "verify_xlsx_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_xlsx_backups.items()},
-                "verify_xlsx_safe_backup_validation_error": remote_xlsx_backup_error,
-                "verify_pdf_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_pdf_backups.items()},
-                "verify_pdf_safe_backup_validation_error": remote_pdf_backup_error,
-                "verify_image_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_image_backups.items()},
-                "verify_image_safe_backup_validation_error": remote_image_backup_error,
-            }
+        remote_backups = sorted(
+            p.relative_to(verify_root).as_posix() for p in (verify_root / root_name).rglob("*safeBackup*")
         )
+        verify_xlsx_error = validate_xlsx_pair(verify_xlsx, REVISION_2)
+        verify_pdf_error = validate_pdf_pair(verify_pdf, PDF_REVISION_2)
+        verify_image_error = validate_image_set(verify_image, IMAGE_REVISION_2)
+        details.update({
+            "verify_returncode": verify.returncode,
+            "remote_canonical_text": self._text_if_file(verify_text),
+            "verify_xlsx_validation_error": verify_xlsx_error,
+            "verify_pdf_validation_error": verify_pdf_error,
+            "verify_image_validation_error": verify_image_error,
+            "remote_safe_backup_paths": remote_backups,
+        })
         self._write_metadata(metadata_file, details)
 
+        failures = []
+        if differences:
+            failures.append(f"upload-only changed local filesystem ({len(differences)} differences); first: {differences[0]}")
+        unexpected_downloads = self._unexpected_download_activity(collision.stdout)
+        if unexpected_downloads:
+            failures.append(f"upload-only attempted download-side reconciliation: {unexpected_downloads}")
+        if repeated is not None:
+            unexpected_uploads = self._unexpected_upload_activity(repeated.stdout)
+            if unexpected_uploads:
+                failures.append(f"unchanged repeat attempted uploads: {unexpected_uploads}")
+            repeated_downloads = self._unexpected_download_activity(repeated.stdout)
+            if repeated_downloads:
+                failures.append(f"unchanged repeat attempted download-side reconciliation: {repeated_downloads}")
         if collision.returncode != 0:
-            return self.fail_result(
-                reason=f"New-file upload collision phase failed with status {collision.returncode}",
-                artifacts=artifacts,
-                details=details,
-            )
-        if self._text_if_file(local_text) != local_text_content or self._hash_if_file(local_text) != local_text_hash:
-            return self.fail_result(
-                reason="New-file upload-only collision removed or changed the local TXT canonical file",
-                artifacts=artifacts,
-                details=details,
-            )
-        if local_xlsx_error or xlsx_pair_hashes(local_xlsx, self._hash_if_file) != local_xlsx_hashes:
-            return self.fail_result(
-                reason=f"New-file upload-only collision removed or changed the local XLSX canonical workbook: {local_xlsx_error}",
-                artifacts=artifacts,
-                details=details,
-            )
-        if local_image_error or image_set_hashes(local_image, self._hash_if_file) != local_image_hashes:
-            return self.fail_result(
-                reason=f"New-file upload-only collision removed or changed the local image canonical set: {local_image_error}",
-                artifacts=artifacts,
-                details=details,
-            )
-        if local_pdf_error or pdf_pair_hashes(local_pdf, self._hash_if_file) != local_pdf_hashes:
-            return self.fail_result(
-                reason=f"New-file upload-only collision removed or changed the local PDF canonical document: {local_pdf_error}",
-                artifacts=artifacts,
-                details=details,
-            )
-        if len(text_backups) != 1 or self._hash_if_file(text_backups[0]) != local_text_hash:
-            return self.fail_result(
-                reason="New-file TXT collision did not preserve exactly one local safeBackup",
-                artifacts=artifacts,
-                details=details,
-            )
-        if xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file) != local_xlsx_hashes or backup_xlsx_error:
-            return self.fail_result(
-                reason=f"New-file XLSX collision did not preserve exactly one valid local safeBackup: {backup_xlsx_error}",
-                artifacts=artifacts,
-                details=details,
-            )
-        if image_set_backup_hashes(image_backups, self._hash_if_file) != local_image_hashes or backup_image_error:
-            return self.fail_result(
-                reason=f"New-file image collision did not preserve exactly one valid local safeBackup: {backup_image_error}",
-                artifacts=artifacts,
-                details=details,
-            )
-        if pdf_pair_backup_hashes(pdf_backups, self._hash_if_file) != local_pdf_hashes or backup_pdf_error:
-            return self.fail_result(
-                reason=f"New-file PDF collision did not preserve exactly one valid local safeBackup: {backup_pdf_error}",
-                artifacts=artifacts,
-                details=details,
-            )
-        if verify.returncode != 0 or self._text_if_file(verify_text) != remote_text_content or verify_xlsx_error or verify_pdf_error or verify_image_error:
-            return self.fail_result(
-                reason=f"New-file upload-only collision unexpectedly replaced the newer online canonical TXT/XLSX/PDF files: XLSX={verify_xlsx_error}; PDF={verify_pdf_error}",
-                artifacts=artifacts,
-                details=details,
-            )
-        if not any(self._text_if_file(path) == local_text_content for path in remote_text_backups):
-            return self.fail_result(
-                reason="New-file TXT collision did not upload the preserved local safeBackup",
-                artifacts=artifacts,
-                details=details,
-            )
-        if remote_xlsx_backup_error:
-            return self.fail_result(
-                reason="New-file XLSX collision did not upload the preserved revision-1 workbook under its safeBackup name",
-                artifacts=artifacts,
-                details=details,
-            )
-        if remote_image_backup_error:
-            return self.fail_result(
-                reason="New-file image collision did not upload the preserved revision-1 image set under its safeBackup names",
-                artifacts=artifacts,
-                details=details,
-            )
-        if remote_pdf_backup_error:
-            return self.fail_result(
-                reason="New-file PDF collision did not upload the preserved revision-1 document under its safeBackup name",
-                artifacts=artifacts,
-                details=details,
-            )
-
+            failures.append(f"upload-only collision exited {collision.returncode}")
+        if repeated is not None and repeated.returncode != 0:
+            failures.append(f"repeated collision exited {repeated.returncode}")
+        if verify.returncode != 0:
+            failures.append(f"independent verification exited {verify.returncode}")
+        elif self._text_if_file(verify_text) != remote_text_content or verify_xlsx_error or verify_pdf_error or verify_image_error:
+            failures.append(f"online-authoritative canonical content changed: XLSX={verify_xlsx_error}, PDF={verify_pdf_error}, images={verify_image_error}")
+        if remote_backups:
+            failures.append(f"upload-only created unexpected remote safeBackup files: {remote_backups[:5]}")
+        if failures:
+            return self.fail_result(reason="; ".join(failures), artifacts=artifacts, details=details)
         return self.pass_result(artifacts=artifacts, details=details)

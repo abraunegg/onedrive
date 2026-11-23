@@ -1779,7 +1779,7 @@ class OneDriveApi {
 	}
 
 	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#upload-bytes-to-the-upload-session
-	JSONValue uploadFragment(string uploadUrl, string filepath, long offset, long offsetSize, long fileSize) {
+	JSONValue uploadFragment(string uploadUrl, string filepath, long offset, long offsetSize, long fileSize, UploadSourceIdentity expectedSource) {
 		// If we upload a modified file, with the current known online eTag, this gets changed when the session is started - thus, the tail end of uploading
 		// a fragment fails with a 412 Precondition Failed and then a 416 Requested Range Not Satisfiable
 		// For the moment, comment out adding the If-Match header in createUploadSession, which then avoids this issue
@@ -1794,7 +1794,7 @@ class OneDriveApi {
 		// Perform the HTTP PUT action to upload the file fragment
 		bool startUploadStreamHash = (offset == 0);
 		bool finishUploadStreamHash = ((offset + offsetSize) == fileSize);
-		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize, startUploadStreamHash, finishUploadStreamHash);
+		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize, startUploadStreamHash, finishUploadStreamHash, expectedSource);
 	}
 
 	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#cancel-the-upload-session
@@ -2769,7 +2769,7 @@ class OneDriveApi {
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 
-	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0, bool startUploadStreamHash=false, bool finishUploadStreamHash=false, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0, bool startUploadStreamHash=false, bool finishUploadStreamHash=false, UploadSourceIdentity expectedSource = UploadSourceIdentity.init, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			scope(failure) {
@@ -2782,7 +2782,7 @@ class OneDriveApi {
 			if (startUploadStreamHash) {
 				curlEngine.beginUploadStreamHash();
 			}
-			curlEngine.setFile(filepath, contentRange, offset, offsetSize);
+			curlEngine.setFile(filepath, contentRange, offset, offsetSize, expectedSource);
 			auto uploadResponse = curlEngine.execute();
 			if (finishUploadStreamHash) {
 				curlEngine.finishUploadStreamHash(uploadResponse);
@@ -2935,6 +2935,15 @@ class OneDriveApi {
 				if (debugLogging) {addLogEntry(callingFunction ~ "() - Generated a OneDrive CurlException", ["debug"]);}
 				auto errorArray = splitLines(exception.msg);
 				string errorMessage = errorArray[0];
+
+				// CURLE_READ_ERROR (26) on a fragment is a local upload-body failure.
+				// Retrying the same fragment indefinitely cannot repair its source.
+				// Phobos CurlException does not expose CURLcode, so identify the
+				// libcurl diagnostic only for this specific upload operation.
+				if (canFind(callingFunction, "uploadFragment") &&
+					canFind(errorMessage, "Failed to open/read local data from file/application")) {
+					throw new UploadSourceInvalidException("Local source could not be read during fragment upload: " ~ errorMessage);
+				}
 
 				// Configure libcurl to perform a fresh connection
 				setFreshConnectOption();

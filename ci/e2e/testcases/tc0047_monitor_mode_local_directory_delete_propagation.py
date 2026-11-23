@@ -168,6 +168,16 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
         finally:
             self._shutdown_monitor_process(process, details)
 
+        # A correct final remote manifest alone cannot prove that the inotify
+        # monitor handled the mutation. Require the post-mutation event itself.
+        if not details.get("mutation_processed", False):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                "Monitor mutation event was not observed; filesystem/remote state alone is insufficient",
+                artifacts, details,
+            )
+
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(verify_root), "--confdir", str(conf_verify)]
         context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
         verify_result = self._run_verify_command(context, verify_command, verify_stdout, verify_stderr)
@@ -182,6 +192,8 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if not keep_verify_path.is_file():
             return self.fail_result(self.case_id, self.name, f"Remote verification is missing retained anchor file: {keep_relative}", artifacts, details)
+        if keep_verify_path.read_bytes() != b"TC0047 anchor\n":
+            return self.fail_result(self.case_id, self.name, "Monitor deletion modified retained remote anchor bytes", artifacts, details)
         if delete_dir_verify_path.exists():
             return self.fail_result(self.case_id, self.name, f"Remote verification still contains deleted directory tree: {delete_dir_relative}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

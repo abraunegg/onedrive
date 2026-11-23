@@ -279,8 +279,11 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             details["modified_pdf_validation_error"] = validate_pdf_pair(modify_pdf_local, PDF_REVISION_1)
             mutate_image_set_revision(modify_image_local, REVISION_0, REVISION_1)
             details["modified_image_validation_error"] = validate_image_set(modify_image_local, REVISION_1)
-            if delete_local.exists():
-                delete_local.unlink()
+            if not delete_local.is_file():
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name,
+                    "Mixed monitor burst delete target missing before deletion stimulus", artifacts, details)
+            delete_local.unlink()
             unlink_xlsx_pair(delete_xlsx_local)
             unlink_pdf_pair(delete_pdf_local)
             unlink_image_set(delete_image_local)
@@ -394,6 +397,16 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             details["rename_pattern_groups"] = rename_groups
         finally:
             self._shutdown_monitor_process(process, details)
+
+        # A correct final remote manifest alone cannot prove that the inotify
+        # monitor handled the mutation. Require the post-mutation event itself.
+        if not details.get("mutation_processed", False):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                "Monitor mutation event was not observed; filesystem/remote state alone is insufficient",
+                artifacts, details,
+            )
 
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(verify_root), "--confdir", str(conf_verify)]
         context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")

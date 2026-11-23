@@ -45,7 +45,7 @@ class TestCase0086HTTPSCredentialRedaction(E2ETestCase):
         write_text_file(sync_root / root_name / "probe.txt", "TC0086 real authenticated request\n")
 
         command = [
-            context.onedrive_bin, "--sync", "--verbose", "--verbose", "--debug-https",
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--verbose", "--debug-https",
             "--resync", "--resync-auth", "--single-directory", root_name,
             "--confdir", str(conf_dir),
         ]

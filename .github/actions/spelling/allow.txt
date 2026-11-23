@@ -156,6 +156,7 @@ drwxrwxr
 dryrun
 DTime
 Dynu
+EContext
 edf
 eflag
 EIOv
@@ -187,6 +188,7 @@ fcgid
 fcgienv
 FCGX
 fcontext
+fdinfo
 fedoraproject
 fefefe
 fexceptions
@@ -242,6 +244,7 @@ hotmail
 howto
 hskrieg
 htons
+Hyprland
 idk
 idlol
 idup
@@ -371,7 +374,9 @@ mozram
 msghdr
 msonenote
 mswsock
+mtim
 mtimes
+mtimespec
 mtls
 mtune
 mydir
@@ -458,6 +463,7 @@ odata
 ofonedrive
 oldlenp
 oldp
+Omarchy
 onbinarymessage
 ondemand
 onedrive
@@ -521,6 +527,7 @@ pycache
 qewrqwerwqer
 Qmark
 qpos
+Quadlet
 QWords
 qxor
 raf
@@ -534,6 +541,7 @@ rcx
 rdi
 rdo
 rdx
+readback
 readdata
 readln
 readret
@@ -696,6 +704,7 @@ undefiened
 unistd
 unittests
 unlinkat
+Unraid
 upn
 urandom
 urlify
