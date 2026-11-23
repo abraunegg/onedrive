@@ -34,6 +34,10 @@ from testcases_business_shared_folders.bsftc0007_direct_shared_office_timestamp_
     BusinessSharedFolderTestCase0007DirectSharedOfficeTimestampReplacement,
 )
 
+from testcases_business_shared_folders.bsftc0008_owner_path_collision import (
+    BusinessSharedFolderTestCase0008OwnerPathCollision,
+)
+
 
 def build_test_suite() -> list:
     return [
@@ -44,6 +48,7 @@ def build_test_suite() -> list:
         BusinessSharedFolderTestCase0005GetSharePointDriveIdWhileMonitoring(),
         BusinessSharedFolderTestCase0006SharePointTimestampReplacement(),
         BusinessSharedFolderTestCase0007DirectSharedOfficeTimestampReplacement(),
+        BusinessSharedFolderTestCase0008OwnerPathCollision(),
     ]
 
 
