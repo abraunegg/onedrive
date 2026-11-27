@@ -2666,7 +2666,27 @@ class SyncEngine {
 				// Did we already exclude?
 				if (!discardDeltaJSONItem) {
 					// Check applicability against 'skip_file', 'skip_dir' and 'sync_list'
-					discardDeltaJSONItem = checkJSONAgainstClientSideFiltering(onedriveJSONItem);
+					bool excludedBySyncList = false;
+					discardDeltaJSONItem = checkJSONAgainstClientSideFiltering(onedriveJSONItem, &excludedBySyncList);
+
+					// A tracked item moved from an included path to an excluded path still
+					// requires local reconciliation. Leave its remote identity untouched.
+					if (discardDeltaJSONItem && excludedBySyncList && syncListConfigured &&
+						(isItemFile(onedriveJSONItem) || isItemFolder(onedriveJSONItem)) &&
+						hasId(onedriveJSONItem) && hasParentReferenceDriveId(onedriveJSONItem) && hasParentReferenceId(onedriveJSONItem)) {
+						Item trackedItem;
+						if (itemDB.selectById(objectParentDriveId, thisItemId, trackedItem) &&
+							trackedItem.syncStatus == "Y" &&
+							((trackedItem.parentId != objectParentId) || (trackedItem.name != thisItemName))) {
+							string oldLocalPath = computeItemPath(trackedItem.driveId, trackedItem.id);
+							if (!oldLocalPath.empty &&
+								!selectiveSync.isPathExcludedViaSyncList(oldLocalPath) &&
+								!pathIsProtectedByNoSync(oldLocalPath)) {
+								addLogEntry("Remote item moved outside sync_list scope; removing previously synced local item: " ~ oldLocalPath, ["verbose"]);
+								idsToDelete ~= [trackedItem.driveId, trackedItem.id, trackedItem.parentId];
+							}
+						}
+					}
 				}
 			}
 
@@ -7504,7 +7524,8 @@ class SyncEngine {
 
 	// Does this JSON item (as received from OneDrive API) get excluded from any operation based on any client side filtering rules?
 	// This function is used when we are fetching objects from the OneDrive API using a /children query to help speed up what object we query or when checking OneDrive Business Shared Files
-	bool checkJSONAgainstClientSideFiltering(JSONValue onedriveJSONItem) {
+	bool checkJSONAgainstClientSideFiltering(JSONValue onedriveJSONItem, bool* excludedBySyncList = null) {
+		if (excludedBySyncList !is null) *excludedBySyncList = false;
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -7953,6 +7974,7 @@ class SyncEngine {
 					} else {
 						// Path is unwanted, flag to exclude
 						clientSideRuleExcludesPath = true;
+						if (excludedBySyncList !is null) *excludedBySyncList = true;
 
 						// Has this itemId already been flagged as being skipped during this sync?
 						if (!syncListSkippedParentIds.canFind(thisItemId)) {
