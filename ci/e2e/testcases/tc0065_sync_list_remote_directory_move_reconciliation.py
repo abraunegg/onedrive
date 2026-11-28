@@ -75,6 +75,9 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             download-only cleanup without observer resync (Discussion #3886)
       S09 - the same in-scope move+rename and obsolete local content after
             resync, with download-only cleanup (Discussion #3886 follow-up)
+      S10 - tracked directory moved online OUT of sync_list; normal bidirectional
+            reconciliation removes its old local subtree and database records,
+            without touching the remote object or excluded local-only content
     """
 
     case_id = "0065"
@@ -197,6 +200,16 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 movement="stale_in_scope",
                 validator_mode="download_only_cleanup",
                 resync_on_reconcile=True,
+            ),
+            ScenarioSpec(
+                scenario_id="S10_remote_move_out_of_sync_list",
+                description=(
+                    "An existing tracked directory moved remotely out of /Documents/ "
+                    "must remove its obsolete local subtree and database records "
+                    "on normal sync without a remote delete/re-upload, including after resync"
+                ),
+                movement="out_of_scope",
+                validator_mode="bidirectional",
             ),
         ]
 
@@ -2531,6 +2544,341 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                     failures.append(f"observer altered remote DriveItem identity: {path}")
         return finish()
 
+    def _run_out_of_scope_move_scenario(
+        self,
+        context: E2EContext,
+        scenario: ScenarioSpec,
+        *,
+        scenario_work: Path,
+        scenario_logs: Path,
+        scenario_state: Path,
+    ) -> tuple[list[str], list[str], dict[str, object]]:
+        """Regression for a previously tracked remote directory moved OUT of sync_list.
+
+        Keep the observer's database and old local tree intact until an ordinary
+        bidirectional --sync reconciles the moved DriveItem. No observer resync
+        or cleanup-local-files may mask a missed move. Inspect SQLite only while
+        the owning client has stopped; verify remote truth with separate clients.
+        """
+        mutator_root = scenario_work / "mutator-root"
+        observer_root = scenario_work / "observer-root"
+        before_verify_root = scenario_work / "before-verify-root"
+        after_verify_root = scenario_work / "after-verify-root"
+        conf_mutator = scenario_work / "conf-mutator"
+        conf_observer = scenario_work / "conf-observer"
+        conf_before_verify = scenario_work / "conf-before-verify"
+        conf_after_verify = scenario_work / "conf-after-verify"
+        mutator_app_logs = scenario_logs / "app-logs"
+        for root in (mutator_root, observer_root, before_verify_root, after_verify_root):
+            reset_directory(root)
+
+        root_name = f"ZZ_E2E_TC0065_{scenario.scenario_id}_{context.run_id}_{os.getpid()}"
+        selected = f"{root_name}/Documents"
+        source = f"{selected}/random_files_fedora"
+        destination = f"{root_name}/random_files_fedora"
+        anchor = f"{selected}/anchor.txt"
+        excluded_local = f"{root_name}/ExcludedLocal/keep.txt"
+        payload = {
+            f"{source}/top-level.txt": "TC0065 out-of-scope tracked parent payload\n",
+            f"{source}/Nested/child.txt": "TC0065 out-of-scope tracked descendant\n",
+            anchor: "TC0065 selected folder anchor\n",
+        }
+        for relative, content in payload.items():
+            write_text_file(mutator_root / relative, content)
+        (mutator_root / source / "EmptyChild").mkdir(parents=True, exist_ok=True)
+
+        self._prepare_client_config(
+            context, conf_mutator, mutator_root,
+            label=f"{scenario.scenario_id} mutator", monitor_app_log_dir=mutator_app_logs,
+        )
+        self._prepare_client_config(
+            context, conf_observer, observer_root,
+            label=f"{scenario.scenario_id} observer", preserve_data=True,
+        )
+        # The test root isolates fixtures. The ONLY observer inclusion is its
+        # /Documents subtree; do not use --single-directory for the observer.
+        write_text_file(conf_observer / "sync_list", f"/{selected}/\n")
+        for conf, root, label in (
+            (conf_before_verify, before_verify_root, "pre-observer verifier"),
+            (conf_after_verify, after_verify_root, "post-observer verifier"),
+        ):
+            self._prepare_client_config(context, conf, root, label=f"{scenario.scenario_id} {label}")
+
+        phase_names = (
+            "seed", "observer_initial", "mutator_monitor", "before_verify",
+            "observer_reconcile", "observer_repeat", "observer_resync", "after_verify",
+        )
+        phase_files = {
+            phase: (scenario_logs / f"{phase}_stdout.log", scenario_logs / f"{phase}_stderr.log")
+            for phase in phase_names
+        }
+        before_manifest_file = scenario_state / "remote_before_observer_manifest.txt"
+        after_manifest_file = scenario_state / "remote_after_observer_manifest.txt"
+        local_manifest_file = scenario_state / "observer_final_manifest.txt"
+        metadata_file = scenario_state / "metadata.txt"
+        artifacts = [
+            *(str(path) for pair in phase_files.values() for path in pair),
+            str(conf_observer / "sync_list"), str(mutator_app_logs),
+            str(before_manifest_file), str(after_manifest_file),
+            str(local_manifest_file), str(metadata_file),
+        ]
+        details: dict[str, object] = {
+            "scenario_id": scenario.scenario_id,
+            "description": scenario.description,
+            "root_name": root_name,
+            "source": source,
+            "destination": destination,
+            "sync_list": [f"/{selected}/"],
+            "excluded_local_control": excluded_local,
+            "observer_items_db": str(conf_observer / "items.sqlite3"),
+        }
+        failures: list[str] = []
+
+        def finish():
+            details["failures"] = failures[:]
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        def get_identities(label: str, conf: Path) -> dict[str, tuple[str, str]]:
+            try:
+                return snapshot_remote_identities(conf / "items.sqlite3", root_name)
+            except (OSError, RuntimeError, ValueError, sqlite3.Error) as error:
+                failures.append(f"{label}: could not inspect stopped-client database: {error}")
+                return {}
+
+        def remote_tree_ok(label: str, root: Path) -> None:
+            moved_payload = {
+                relative.replace(source, destination, 1): content
+                for relative, content in payload.items() if relative.startswith(source + "/")
+            }
+            moved_payload[anchor] = payload[anchor]
+            failures.extend(
+                f"{label}: {problem}"
+                for problem in self._tree_matches(
+                    root=root, expected_files=moved_payload,
+                    required_dirs=[destination, f"{destination}/Nested", f"{destination}/EmptyChild"],
+                    forbidden_paths=[source, excluded_local],
+                )
+            )
+
+        seed = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_seed",
+            command=self._seed_upload_command(context, root_name=root_name, conf_dir=conf_mutator),
+            stdout_file=phase_files["seed"][0], stderr_file=phase_files["seed"][1], details=details,
+        )
+        if seed.returncode != 0:
+            failures.append(f"mutator seed failed: {seed.returncode}")
+            return finish()
+        mutator_before = get_identities("mutator seed", conf_mutator)
+        tracked_paths = [source, f"{source}/Nested", f"{source}/Nested/child.txt", f"{source}/top-level.txt", f"{source}/EmptyChild"]
+        if any(path not in mutator_before for path in tracked_paths):
+            failures.append("mutator seed missing original tracked directory or descendant identities")
+            return finish()
+
+        preload = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_observer_initial",
+            command=self._validator_initial_command(context, conf_dir=conf_observer),
+            stdout_file=phase_files["observer_initial"][0],
+            stderr_file=phase_files["observer_initial"][1], details=details,
+        )
+        initial_output = self._combined_output(*phase_files["observer_initial"])
+        if preload.returncode != 0:
+            failures.append(f"observer preload failed: {preload.returncode}")
+        if not self._sync_list_active(initial_output, selected):
+            failures.append("observer preload did not establish the Documents-only sync_list")
+        if not self._validator_mode_active(initial_output, "download_only"):
+            failures.append("observer preload did not use download-only mode")
+        failures.extend(
+            f"observer preload: {problem}"
+            for problem in self._tree_matches(
+                root=observer_root, expected_files=payload,
+                required_dirs=[source, f"{source}/Nested", f"{source}/EmptyChild"],
+                forbidden_paths=[destination],
+            )
+        )
+        observer_before = get_identities("observer before remote move", conf_observer)
+        if any(observer_before.get(path) != mutator_before[path] for path in tracked_paths):
+            failures.append("observer did not preload the original tracked DriveItem IDs")
+        if failures:
+            return finish()
+
+        # An excluded, never-synchronised local control must remain untouched.
+        write_text_file(observer_root / excluded_local, "Excluded local data must survive\n")
+
+        process, ready = self._launch_ready_mutator_monitor(
+            context=context, root_name=root_name, conf_mutator=conf_mutator,
+            monitor_stdout=phase_files["mutator_monitor"][0],
+            monitor_stderr=phase_files["mutator_monitor"][1], details=details,
+        )
+        try:
+            if not ready:
+                failures.append("mutator monitor did not complete initial sync")
+            else:
+                processed, segment = self._run_mutator_move_transaction(
+                    process=process, monitor_stdout=phase_files["mutator_monitor"][0],
+                    details=details,
+                    moves=[(mutator_root / source, mutator_root / destination, source, destination)],
+                    detail_prefix="out_of_scope_move",
+                )
+                if not processed or not self._contains_monitor_move_pair(segment, source, destination):
+                    failures.append("mutator did not prove identity-preserving remote move")
+                if self._bad_mutator_move_markers(segment):
+                    failures.append("mutator logged delete/re-upload rather than a remote move")
+        finally:
+            self._shutdown_monitor_process(process, details)
+        if failures:
+            return finish()
+        mutator_after = get_identities("mutator after move", conf_mutator)
+        if failures:
+            return finish()
+
+        pre_verify = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_before_verify",
+            command=self._verify_command(context, root_name=root_name, conf_dir=conf_before_verify),
+            stdout_file=phase_files["before_verify"][0],
+            stderr_file=phase_files["before_verify"][1], details=details,
+        )
+        if pre_verify.returncode != 0:
+            failures.append(f"independent remote pre-check failed: {pre_verify.returncode}")
+            return finish()
+        remote_tree_ok("remote before observer", before_verify_root)
+        remote_before = get_identities("independent pre-observer verifier", conf_before_verify)
+        transitions = [(path, path.replace(source, destination, 1)) for path in tracked_paths]
+        failures.extend(check_remote_identity_transition(
+            mutator_before, mutator_after, remote_before, transitions, preserve_identity=True,
+        ))
+        before_manifest = build_typed_manifest(before_verify_root / root_name)
+        write_manifest(before_manifest_file, before_manifest)
+        if not (observer_root / source).is_dir():
+            failures.append("observer old local directory was absent before reconciliation")
+        if failures:
+            return finish()
+
+        # This is the regression: ordinary bidirectional sync, with the original
+        # observer DB still present and the old local directory still on disk.
+        reconcile = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_observer_reconcile",
+            command=self._validator_reconcile_command(
+                context, conf_dir=conf_observer, validator_mode="bidirectional",
+            ),
+            stdout_file=phase_files["observer_reconcile"][0],
+            stderr_file=phase_files["observer_reconcile"][1], details=details,
+        )
+        reconcile_output = self._combined_output(*phase_files["observer_reconcile"])
+        if reconcile.returncode != 0:
+            failures.append(f"observer ordinary reconciliation failed: {reconcile.returncode}")
+        if not self._sync_list_active(reconcile_output, selected):
+            failures.append("observer reconciliation did not retain Documents-only sync_list")
+        if not self._validator_mode_active(reconcile_output, "bidirectional"):
+            failures.append("observer reconciliation did not use bidirectional mode")
+        if re.search(r"Config option 'resync'\s*=\s*true", reconcile_output):
+            failures.append("observer unexpectedly used resync during primary reconciliation")
+        if "Remote item moved outside sync_list scope; removing previously synced local item:" not in reconcile_output:
+            failures.append("observer did not report known-item move outside sync_list")
+        if self._bad_validator_move_markers(reconcile_output):
+            failures.append("observer emitted unwanted upload or remote-delete markers")
+        if (observer_root / source).exists():
+            failures.append("obsolete local directory remained after out-of-scope move")
+        if (observer_root / destination).exists():
+            failures.append("excluded remote destination was incorrectly created locally")
+        for relative, content in ((anchor, payload[anchor]), (excluded_local, "Excluded local data must survive\n")):
+            path = observer_root / relative
+            if not path.is_file() or path.read_text(encoding="utf-8", errors="replace") != content:
+                failures.append(f"observer damaged selected or excluded local control: {relative}")
+
+        # Verify ALL descendants are purged by original immutable ID, not merely
+        # that the old path vanished. Stop the owning client before SQLite reads.
+        observer_after = get_identities("observer after reconciliation", conf_observer)
+        if any(path in observer_after for path in tracked_paths):
+            failures.append("old paths remain in observer's tracked database")
+        if destination in observer_after:
+            failures.append("excluded destination incorrectly remains tracked")
+        db_path = conf_observer / "items.sqlite3"
+        try:
+            with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as db:
+                stale_ids = [observer_before[path] for path in tracked_paths]
+                still_tracked = [item_id for drive_id, item_id in stale_ids
+                                 if db.execute("SELECT 1 FROM item WHERE driveId=? AND id=?", (drive_id, item_id)).fetchone()]
+                details["stale_tracked_ids_after_reconcile"] = still_tracked
+                if still_tracked:
+                    failures.append("old tracked item/descendant identities remain in SQLite")
+                integrity = db.execute("PRAGMA integrity_check").fetchone()
+                foreign_key_errors = db.execute("PRAGMA foreign_key_check").fetchall()
+                details["database_integrity"] = integrity[0] if integrity else None
+                details["database_foreign_key_errors"] = foreign_key_errors
+                if integrity != ("ok",) or foreign_key_errors:
+                    failures.append("observer SQLite integrity or foreign-key validation failed")
+        except sqlite3.Error as error:
+            failures.append(f"observer SQLite verification failed: {error}")
+
+        expected_local = sorted([
+            "Documents/", "Documents/anchor.txt", "ExcludedLocal/", "ExcludedLocal/keep.txt",
+        ])
+        local_manifest = build_typed_manifest(observer_root / root_name)
+        write_manifest(local_manifest_file, local_manifest)
+        if local_manifest != expected_local:
+            failures.append(
+                "observer local tree not fully reconciled: "
+                f"missing {sorted(set(expected_local) - set(local_manifest))}, "
+                f"unexpected {sorted(set(local_manifest) - set(expected_local))}"
+            )
+        if failures:
+            return finish()
+
+        # Idempotence and the resync/re-upload regression concern. The old
+        # local path MUST already have been removed before either extra pass.
+        repeat = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_observer_repeat",
+            command=self._validator_reconcile_command(
+                context, conf_dir=conf_observer, validator_mode="bidirectional",
+            ),
+            stdout_file=phase_files["observer_repeat"][0],
+            stderr_file=phase_files["observer_repeat"][1], details=details,
+        )
+        if repeat.returncode != 0:
+            failures.append(f"observer repeat sync failed: {repeat.returncode}")
+        if self._bad_validator_move_markers(self._combined_output(*phase_files["observer_repeat"])):
+            failures.append("observer repeat sync attempted upload or remote delete")
+        resync_command = self._validator_reconcile_command(
+            context, conf_dir=conf_observer, validator_mode="bidirectional",
+        )
+        resync_command[4:4] = ["--resync", "--resync-auth"]
+        resync = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_observer_resync",
+            command=resync_command,
+            stdout_file=phase_files["observer_resync"][0],
+            stderr_file=phase_files["observer_resync"][1], details=details,
+        )
+        if resync.returncode != 0:
+            failures.append(f"observer post-reconciliation resync failed: {resync.returncode}")
+        if self._bad_validator_move_markers(self._combined_output(*phase_files["observer_resync"])):
+            failures.append("observer resync attempted an unexpected upload or remote delete")
+        if (observer_root / source).exists() or (observer_root / destination).exists():
+            failures.append("old or excluded directory reappeared during repeat sync/resync")
+        if build_typed_manifest(observer_root / root_name) != expected_local:
+            failures.append("local selection boundary changed during repeat sync/resync")
+        if failures:
+            return finish()
+
+        post_verify = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_after_verify",
+            command=self._verify_command(context, root_name=root_name, conf_dir=conf_after_verify),
+            stdout_file=phase_files["after_verify"][0],
+            stderr_file=phase_files["after_verify"][1], details=details,
+        )
+        if post_verify.returncode != 0:
+            failures.append(f"independent remote post-check failed: {post_verify.returncode}")
+            return finish()
+        remote_tree_ok("remote after observer", after_verify_root)
+        after_manifest = build_typed_manifest(after_verify_root / root_name)
+        write_manifest(after_manifest_file, after_manifest)
+        if after_manifest != before_manifest:
+            failures.append("observer changed the remote tree during reconciliation/resync")
+        remote_after = get_identities("independent post-observer verifier", conf_after_verify)
+        if remote_after != remote_before:
+            failures.append("observer changed remote DriveItem identities during reconciliation/resync")
+        return finish()
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -2564,7 +2912,15 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             reset_directory(scenario_logs)
             reset_directory(scenario_state)
 
-            if scenario.movement == "stale_in_scope":
+            if scenario.movement == "out_of_scope":
+                scenario_failures, artifacts, details = self._run_out_of_scope_move_scenario(
+                    context,
+                    scenario,
+                    scenario_work=scenario_work,
+                    scenario_logs=scenario_logs,
+                    scenario_state=scenario_state,
+                )
+            elif scenario.movement == "stale_in_scope":
                 scenario_failures, artifacts, details = self._run_selection_boundary_scenario(
                     context,
                     scenario,
